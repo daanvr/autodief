@@ -1,0 +1,5 @@
+# Persoonlijke speelopnames
+recordings/
+# Lokale tooling
+.claude/
+.DS_Store
