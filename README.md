@@ -7,7 +7,7 @@ Visueel: pixel-art in de stijl van de jaren 90 (bovenaanzicht à la GTA 1). De i
 
 **Online spelen:** https://daanvr.github.io/autodief/
 
-Of lokaal: Open `index.html` in een browser. Dat werkt zonder server. Of start een lokale server:
+Of lokaal: open `index.html` in een browser. Dat werkt zonder server. Of start een lokale server:
 
 ```bash
 python3 -m http.server 8642 --directory autodief
