@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Autodief</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app" class="crt" data-view="title">
+    <div class="titlebar">
+      <span class="logo">AUTODIEF</span>
+      <span id="title" class="wtitle"></span>
+      <span class="tbtns">
+        <button id="btn-sound" class="tbtn">Geluid aan</button>
+        <button id="btn-crt" class="tbtn">CRT</button>
+      </span>
+    </div>
+
+    <div class="topbar panel">
+      <div class="tcol"><span>Dag <b id="hud-day">1</b></span><span class="cash">Cash: <b id="hud-money">€0</b></span></div>
+      <div class="tcol"><span class="debt">Schuld: <b id="hud-debt">€0</b></span><span class="costs">Dagkosten: <b id="hud-costs">€0</b></span></div>
+      <div class="tcol"><span>Level <b id="hud-level">1</b></span><span class="record">Strafblad: <b id="hud-record">0/3</b></span></div>
+      <div class="tcol lvl"><span>Ervaring</span><span class="bar xp"><i id="hud-xp"></i></span></div>
+    </div>
+
+    <div class="main">
+      <aside class="col left">
+        <section id="left" class="panel"></section>
+        <section class="panel"><h3>Rugzak</h3><div class="body"><div id="backpack" class="bag"></div></div></section>
+      </aside>
+
+      <main class="col center">
+        <section class="panel screen">
+          <div id="screen-wrap"><canvas id="scene" width="320" height="180"></canvas><div class="scan"></div></div>
+          <div class="under">
+            <span class="wl">Gezocht</span>
+            <span class="bar heat"><i id="hud-heat"></i></span>
+            <span id="hud-heads" class="heads"></span>
+            <span id="hud-loc" class="loc"></span>
+          </div>
+          <div id="meter"></div>
+        </section>
+        <section class="panel story">
+          <div id="log"></div>
+          <div id="actions"></div>
+        </section>
+      </main>
+
+      <aside id="right" class="col right"></aside>
+    </div>
+    <div class="foot">Toetsen 1-9 kiezen, M = geluid. Alle beelden en geluiden zijn in code gegenereerd.</div>
+  </div>
+
+  <!-- Configuratie: pas deze bestanden aan om het spel te tunen -->
+  <script src="js/config/settings.js"></script>
+  <script src="js/config/cars.js"></script>
+  <script src="js/config/items.js"></script>
+  <script src="js/config/crew.js"></script>
+  <script src="js/config/districts.js"></script>
+  <script src="js/config/spots.js"></script>
+  <script src="js/config/events.js"></script>
+  <!-- Kern -->
+  <script src="js/core/rng.js"></script>
+  <script src="js/core/state.js"></script>
+  <script src="js/core/rules.js"></script>
+  <!-- Beeld & geluid -->
+  <script src="js/render/sprites.js"></script>
+  <script src="js/render/scene.js"></script>
+  <script src="js/audio/sfx.js"></script>
+  <!-- Flow & interface -->
+  <script src="js/core/engine.js"></script>
+  <script src="js/ui/ui.js"></script>
+  <!-- Opname van het speelproces (uit met ?norec). Logserver: python3 tools/logserver.py -->
+  <script src="js/core/recorder.js"></script>
+  <!-- Voorlezen met de systeemstem (knop bovenin / toets V) -->
+  <script src="js/ui/speech.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
