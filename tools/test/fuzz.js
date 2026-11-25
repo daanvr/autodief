@@ -1,0 +1,6 @@
+// Willekeurige keuzes over heel veel schermen: zoekt crashes, NaN/undefined en ongeldige waarden.
+const h=require('./head.js'); let seen={},bad={},n=0,ends={}; const o=AD.ui.render;
+AD.ui.render=x=>{o(x); n++; seen[x.title.replace(/\d+/g,'#')]=1; const t=JSON.stringify([x.title,x.lines,(x.choices||[]).filter(Boolean).map(c=>[c.label,c.hint,c.reason,c.why])]); const m=t.match(/.{0,60}(undefined|NaN|\[object|\{\w+\}).{0,30}/); if(m&&!/"\{"t"/.test(m[0])) bad[m[0]]=1; const s=AD.state.S; if(s)['money','heat','health','armor','xp'].forEach(k=>{if(!Number.isFinite(s[k])||s[k]<0)bad[k+s[k]]=1}); JSON.parse(JSON.stringify(s||{})); };
+const rich=S=>{S.money=60000;S.level=6;S.heat=Math.random()*100;Object.keys(AD.ITEMS).forEach(i=>{const it=AD.ITEMS[i]; if(it.cat!=='armor'&&Math.random()<.7)S.inv[i]=it.consumable?3:1});AD.crewGen.refresh();S.crew=S.hires.slice(0,Math.floor(Math.random()*4));S.garage.slots=4;S.garage.cars=[{uid:900,id:'hothatch',condition:Math.random(),hot:false,color:0}];S.getaway=900;};
+for(let g=0;g<300;g++){ const r=h.play(400,(c,ch)=>{ if(/schuilplaats/.test(c.title)&&Math.random()<.6) return ch[0]; return ch[Math.floor(Math.random()*ch.length)]; }, g%3?rich:null); ends[r]=(ends[r]||0)+1; }
+console.log({schermen:n,ends,bad:Object.keys(bad).slice(0,8),titels:Object.keys(seen).filter(t=>/^[A-Z?! ]+$/.test(t)).join(', ')});
