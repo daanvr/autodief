@@ -34,9 +34,19 @@ def current():
     return int(re.search(r'nr:\s*(\d+)', open(p('js', 'version.js'), encoding='utf-8').read()).group(1))
 
 
+def patch():
+    return int(re.search(r'patch:\s*(\d+)', open(p('js', 'version.js'), encoding='utf-8').read()).group(1))
+
+
+def newest_tag(nr):
+    """v2 of, als er reparaties zijn uitgebracht, de hoogste v2.x"""
+    tags = subprocess.check_output(['git', 'tag', '-l', f'v{nr}', f'v{nr}.*'], cwd=ROOT, text=True).split()
+    return max(tags, key=lambda t: [int(x) for x in t[1:].split('.')])
+
+
 def snapshot(nr):
     nr = int(nr)
-    data = subprocess.check_output(['git', 'archive', f'v{nr}', '--', 'index.html', 'css', 'js'], cwd=ROOT)
+    data = subprocess.check_output(['git', 'archive', newest_tag(nr), '--', 'index.html', 'css', 'js'], cwd=ROOT)
     dest = p(f'v{nr}')
     shutil.rmtree(dest, ignore_errors=True)
     os.makedirs(dest)
@@ -53,7 +63,7 @@ def snapshot(nr):
 
 
 def stamp():
-    nr = current()
+    nr = f'{current()}.{patch()}'
     s = open(p('index.html'), encoding='utf-8').read()
     s = re.sub(r'((?:src|href)="(?:js|css)/[^"?]+)(?:\?v=[^"]*)?"', rf'\1?v={nr}"', s)
     open(p('index.html'), 'w', encoding='utf-8').write(s)

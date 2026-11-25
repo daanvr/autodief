@@ -22,6 +22,7 @@ Standaard wordt elke open issue van **daanvr** of **Ikzor** meteen opgepakt en l
 3. Bouw en test (zie onder).
 4. `python3 tools/release.py stamp` en `python3 tools/release.py index`.
 5. Commit, `git tag -a vN+1`, en `git push origin main --tags`.
+   Kleine reparatie aan een net uitgebrachte versie: verhoog `patch` in `js/version.js`, stamp, en tag `vN.patch`. Bij een nieuwe `nr` gaat `patch` terug naar 0.
 6. Wacht tot Pages gebouwd is. Controleer live de root, `/vN/` en `/versies/`.
 7. Reageer op de issue: per wens wat er gedaan is, wat niet, en de link naar de oude versie. Sluit de issue als alles af is.
 

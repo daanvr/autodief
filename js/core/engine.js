@@ -626,7 +626,10 @@ window.AD = window.AD || {};
     const cars = [];
     for (let i = 0; i < n; i++) {
       const place = makeSpot().place;
-      cars.push({ inst: spawnCar(), place, see: seeAt(place), slot: slots[i] });
+      // Liever verschillende modellen, anders valt er niks te kiezen
+      let inst = spawnCar();
+      for (let t = 0; t < 15 && cars.some(c => c.inst.id === inst.id); t++) inst = spawnCar();
+      cars.push({ inst, place, see: seeAt(place), slot: slots[i] });
     }
     return { cars, spot: makeSpot(), seed: rng.int(1, 99999) };
   }
