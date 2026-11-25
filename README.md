@@ -5,7 +5,7 @@ Visueel: pixel-art in de stijl van de jaren 90 (bovenaanzicht à la GTA 1). De i
 
 ## Spelen
 
-**Online spelen:** https://daanvr.github.io/autodief/
+**Online spelen:** https://daanvr.github.io/autodief/ · **Oude versies:** https://daanvr.github.io/autodief/versies/
 
 Of lokaal: open `index.html` in een browser. Dat werkt zonder server. Of start een lokale server:
 
@@ -18,7 +18,7 @@ en ga naar http://localhost:8642. Kiezen doe je met klikken of met de toetsen **
 ## De spellus
 
 1. **Schuilplaats (kaart):** winkel, garage, kroeg (crew), dokter, de Baas (schuld afbetalen), vaardigheden en onderduiken.
-2. **Op pad:** kies een wijk. Elke stap op straat kom je een auto tegen of gebeurt er iets. Bij elke auto zie je per gereedschap de **slagingskans** en de **alarmkans**.
+2. **Op pad:** kies een wijk. Per straat zie je een **overzicht met 4 tot 6 auto's**: klik er een aan voor informatie en kies op welke je afstapt. Bij elke auto zie je per gereedschap de **slagingskans**, de **alarmkans** en waar de kans vandaan komt.
 3. **Inbreken:** elke auto staat ergens (onder een lantaarnpaal, in een steeg...) en er lopen soms **omstanders** rond. Elke actie kost **minuten** en trekt **aandacht** (0-100%). Omstanders kunnen je zien, gaan kijken en de politie bellen. Daarna telt de **politie-ETA** af. Je ziet dit allemaal in balken onder het beeld. Je kunt altijd **wachten tot de kust veilig is** of **afhaken en weglopen**.
 4. **Politie ziet je in de auto:** kies **wegrijden**, **uitstappen en rennen** of **doen alsof er niets is**.
 5. **Achtervolging:** elke ronde een tekst-situatie met keuzes. Je *voorsprong* loopt van 0 (gepakt) tot 100 (ontsnapt). Bij hoge heat wordt er **geschoten**. Je kunt dan terugschieten met elk wapen dat je hebt, of je **crew** laten terugvuren. Je kunt ook elke ronde uitstappen en te voet verder vluchten.
@@ -26,8 +26,13 @@ en ga naar http://localhost:8642. Kiezen doe je met klikken of met de toetsen **
 7. **Buit:** verkoop direct aan de sloperij (weinig geld) of stal de auto in je garage. Daar kun je repareren en overspuiten, en dan verkopen aan de heler of de exporthaven (meer geld).
 8. **Doel:** betaal je schuld van €50.000 af bij de Baas.
 
+**Vechten of vluchten:** als er geschoten wordt, als ze vlakbij zijn of bij een arrestatie kun je vechten. Je geeft jezelf en elk crewlid een opdracht (aanvallen, dekking, aandacht trekken) en speelt ronde voor ronde. Bescherming koop je per persoon. Je kunt ook iemand achterlaten, maar die kan later gaan **klikken**.
+**Vluchtauto:** stel in de garage een eigen auto in. Daar kun je naartoe rennen als het misgaat.
+**Leren door te doen:** wat je vaak doet, word je vanzelf beter in. Gereedschap en automodellen leer je kennen door ze te gebruiken.
+**Jaren 90:** omstanders moeten eerst een telefoon vinden, de politie kan je gewoon kwijtraken, en een aantekening verjaart na een tijd.
+
 **Heat** (de politiehoofdjes) stijgt bij elke diefstal, elk alarm, elke achtervolging en elk schot. Heat zakt elke dag; onderduiken versnelt dat.
-**Radar:** zonder scanner zie je bij achtervolgingen alleen vage kansen ("veilig / gok / riskant"). Met de politiescanner zie je exacte kansen. De politieradar toont ook hoe dichtbij de politie is en je pakkans. De satelliet-tracker laat het aantal eenheden en de helikopter zien.
+**Radar:** zonder scanner zie je bij achtervolgingen alleen vage kansen ("veilig / gok / riskant"). Met de politiescanner zie je exacte kansen. De politieradar toont ook je pakkans, en met de gestolen portofoon hoor je elke eenheid.
 
 ## Voorlezen
 
@@ -55,7 +60,9 @@ Het spel is opgebouwd uit losse modules. De meeste wijzigingen zijn alleen data.
 | Balans: startgeld, schuld, huur, heat, kansformules, prijzen garage/kopers | `js/config/settings.js` |
 | Auto's (waarde, slot, elektronica, alarm, snelheid, kleur, sprite) | `js/config/cars.js` |
 | Winkel: gereedschap, gadgets, radar, wapens, diensten | `js/config/items.js` |
-| Crew-rollen, bonussen, namen | `js/config/crew.js` |
+| Crew-rollen, bonussen, namen | `js/config/crew.js` (schermen: `js/core/crew.js`) |
+| Vechten | `js/core/fight.js` (getallen: `fight` in settings.js) |
+| Versies en oude versies | `js/version.js`, `versies/versions.json`, `tools/release.py` |
 | Wijken (politie, welke auto's) | `js/config/districts.js` |
 | Plekken en omstanders bij het inbreken | `js/config/spots.js` |
 | Alle tekst-situaties en keuzes (straat, politie, achtervolging, vuurgevecht), met gewicht, cooldown, wijken, varianten en vervolgsituaties | `js/config/events.js` |

@@ -226,6 +226,20 @@ window.AD = window.AD || {};
     n: '#8a5a2a', N: '#5a3a18', s: '#e8b888', p: '#a040c0', e: '#e8d8a8',
   };
   const ICONS = {
+    lopers: ['............', '...llll.....', '..l....l....', '..l....l....', '...llll.....', '....ll......', '....ll......', '....lll.....', '....ll......', '....llll....', '....ll......', '............'],
+    glasbreker: ['............', '.......rr...', '......rrrr..', '...dddrrrr..', '..ddddrrr...', '..l.dd......', '.l.dd....c..', '..dd....c.c.', '.dd....c...c', 'dd......c.c.', 'd........c..', '............'],
+    sleuteltrekker: ['.....gg.....', '.....gg.....', '..gggggggg..', '..g..gg..g..', '.....gg.....', '.....gg.....', '.....gg.....', '....gggg....', '....gyyg....', '....gggg....', '.....yy.....', '.....yy.....'],
+    alarmklem: ['............', '..dd....dd..', '..ddd..ddd..', '...dddddd...', '....dddd....', '....rddr....', '...rr..rr...', '..rr....rr..', '..rr....rr..', '..r......r..', '............', '............'],
+    kniptang: ['...l....l...', '...ll..ll...', '....llll....', '.....ll.....', '....llll....', '...yy..yy...', '..yy....yy..', '..yy....yy..', '..yy....yy..', '...y....y...', '............', '............'],
+    taser: ['............', '...c....c...', '....c..c....', '..kkkkkkkk..', '..kyyyyyyk..', '..kkkkkkkk..', '.....kkkk...', '.....kkkk...', '.....kkkk...', '.....kkkk...', '............', '............'],
+    kraaienpoten: ['............', '..g.........', '..gg...g....', '.ggg..ggg...', '...g....g...', '............', '.......g....', '..g...ggg...', '.ggg....g...', '...g........', '............', '............'],
+    motorolie: ['............', '....kkkk....', '....k.......', '..kkkkkkk...', '..kyyyyyk...', '..kykkkyk...', '..kyyyyyk...', '..kykkkyk...', '..kyyyyyk...', '..kkkkkkk...', '.....kkkkkk.', '............'],
+    rookbom: ['...ll.ll....', '..llllllll..', '...llllll...', '.....l......', '....kkkk....', '...kddddk...', '..kddddddk..', '..kddddddk..', '..kddddddk..', '...kddddk...', '....kkkk....', '............'],
+    pepperspray: ['.....kk.....', '....kkkk.r..', '....kkkkr.r.', '....krrk.r..', '....krrk....', '....kyyk....', '....krrk....', '....krrk....', '....krrk....', '....kkkk....', '............', '............'],
+    vermomming: ['...bbbbb....', '..bbbbbbb...', '..bbbbbbbbb.', '...sssss....', '...sssss....', '..nnnnnnn...', '.nnnnwnnnn..', '.nnnnwnnnn..', '.nnnnwnnnn..', '.nnnnwnnnn..', '..nnnnnnn...', '............'],
+    leer: ['............', '..NN....NN..', '.NNNN..NNNN.', '.NnnNNNNnnN.', '.NnnnnnnnnN.', '..NnnkknnN..', '..NnnkknnN..', '..NnnkknnN..', '..NnnkknnN..', '..NNNNNNNN..', '............', '............'],
+    vest: ['............', '..dd....dd..', '..ddd..ddd..', '..dddddddd..', '..dgggggd...', '..dggggggd..', '..dddddddd..', '..dggggggd..', '..dggggggd..', '..dddddddd..', '............', '............'],
+    zwaarvest: ['............', '..BB....BB..', '.BBBB..BBBB.', '.BBBBBBBBBB.', '.BbbbbbbbbB.', '.BbbbyybbbB.', '.BBBBBBBBBB.', '.BbbbbbbbbB.', '.BbbbbbbbbB.', '.BBBBBBBBBB.', '............', '............'],
     schroevendraaier: ['..........l.', '.........ll.', '........ll..', '.......ll...', '......ll....', '.....gl.....', '....rr......', '...rrrr.....', '..rrrrR.....', '.rrrrR......', '.rrRR.......', '..R.........'],
     breekijzer: ['......rrrr..', '.....rrRRrr.', '.....rr..Rr.', '....rr......', '....rr......', '...rr.......', '...rr.......', '..rr........', '..rr........', '.rr.........', '.rR.........', '............'],
     slimjim: ['..........ll', '.........lg.', '........lg..', '.......lg...', '......lg....', '.....lg.....', '....lg......', '...lg.......', '..lg........', '.lg.........', '.lgg........', '..gg........'],
@@ -265,7 +279,7 @@ window.AD = window.AD || {};
     act_surrender: ['.n..........', '.nwwwwwww...', '.nwwwwwwww..', '.nwwwwwwww..', '.nwwwwwww...', '.n..........', '.n..........', '.n..........', '.n..........', '.n..........', '.N..........', '............'],
   };
   const ALIAS = {
-    cat_tool: 'breekijzer', cat_starter: 'hotwirekit', cat_gadget: 'radar', cat_weapon: 'pistool', cat_service: 'ehbo',
+    cat_tool: 'breekijzer', cat_starter: 'hotwirekit', cat_gadget: 'radar', cat_weapon: 'pistool', cat_service: 'ehbo', cat_escape: 'rookbom', cat_armor: 'vest',
     role_chauffeur: 'act_drive', role_kraker: 'lockpick', role_uitkijk: 'radar', role_spierbundel: 'knuppel', role_schutter: 'pistool',
   };
   SP.hasIcon = id => !!(ICONS[id] || ALIAS[id] || /^car_|^loc_wijk$/.test(id || ''));

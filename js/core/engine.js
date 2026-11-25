@@ -26,7 +26,31 @@ window.AD = window.AD || {};
   // ---------- Staat aanpassen ----------
   function addHeat(n) { const s = S(); s.heat = R.clamp(s.heat + (n > 0 ? n * R.heatMult() : n), 0, C().heat.max); }
   function addMoney(n) { const s = S(); s.money = Math.max(0, s.money + n); if (n > 0) s.stats.earned += n; }
-  function hurt(n) { const s = S(); s.health = R.clamp(s.health - n, 0, C().health.max); }
+  // Schade: bescherming (armor) vangt een deel op. Geeft terug hoeveel er echt doorkwam.
+  function hurt(n) {
+    const s = S(), abs = Math.min(s.armor || 0, Math.round(n * C().fight.absorb));
+    s.armor -= abs; s.health = R.clamp(s.health - (n - abs), 0, C().health.max);
+    return n - abs;
+  }
+  const SKILLS = E.SKILLS = {
+    inbreken: ['Slotenkennis', 'Openbreken en starten'], rijden: ['Rijden', 'Alles achter het stuur'],
+    rennen: ['Rennen', 'Te voet vluchten'], gladheid: ['Praatjes', 'Smoesjes, omkopen, betere prijzen'],
+    schieten: ['Schieten', 'Vuurgevechten en vechten'],
+  };
+  // Leren door te doen: wat je vaak doet, word je vanzelf beter in
+  function practice(skill, ok, lines) {
+    const s = S(), p = C().practice;
+    if (!skill || s.skills[skill] >= C().maxSkill) return;
+    s.skillXp[skill] = (s.skillXp[skill] || 0) + (ok ? p.ok : p.fail) * (p.speed[skill] || 1);
+    const need = R.practiceNeed(s.skills[skill]);
+    if (s.skillXp[skill] < need) return;
+    s.skillXp[skill] -= need; s.skills[skill]++;
+    lines.push(L(`Oefening baart kunst: **${SKILLS[skill][0]}** is nu **${s.skills[skill]}**.`, 'good'));
+    AD.sfx.levelup();
+  }
+  // Gooien met een kans én de bijbehorende vaardigheid oefenen
+  function roll(p, skill, out) { const ok = rng.chance(p); practice(skill, ok, out); return ok; }
+  function addDistrictHeat(id, n) { const d = S().districtHeat; d[id] = R.clamp((d[id] || 0) + n, 0, 100); }
   function addXp(n, lines) {
     const s = S(); s.xp += n;
     while (s.xp >= R.xpForNext(s.level)) {
@@ -55,7 +79,7 @@ window.AD = window.AD || {};
     if (o.money) { const m = rng.roll(o.money); addMoney(m); extra.money = fmt(Math.abs(m)); }
     if (o.text) lines.push(L(tpl(o.text, extra), o.cls || null));
     if (o.heat) addHeat(o.heat);
-    if (o.hurt) { const h = rng.roll(o.hurt); if (h > 0) { hurt(h); lines.push(L(`Je bent gewond: -${h} gezondheid.`, 'bad')); AD.sfx.hit(); } }
+    if (o.hurt) { const h = rng.roll(o.hurt); if (h > 0) { const real = hurt(h); lines.push(L(`Je bent gewond: -${real} gezondheid.${real < h ? ` Je bescherming ving ${h - real} op.` : ''}`, 'bad')); AD.sfx.hit(); } }
     if (o.susp && run) run.suspicion = Math.max(0, run.suspicion + o.susp);
     if (o.tip && run) run.tip = true;
     if (o.give) S().inv[o.give] = (S().inv[o.give] || 0) + 1;
@@ -72,8 +96,9 @@ window.AD = window.AD || {};
       AD.sfx.crash();
     }
     if (o.crewHit && S().crew.length) {
-      const m = rng.pick(S().crew), d = rng.roll(o.crewHit);
-      m.hp -= d;
+      const m = rng.pick(S().crew), raw = rng.roll(o.crewHit);
+      const abs = Math.min(m.armor || 0, Math.round(raw * C().fight.absorb)), d = raw - abs;
+      m.armor -= abs; m.hp -= d;
       if (m.hp <= 0) { S().crew = S().crew.filter(x => x !== m); lines.push(L(`${m.name} is zwaar geraakt en blijft achter.`, 'bad')); }
       else lines.push(L(`${m.name} is geraakt (-${d}).`, 'bad'));
     }
@@ -107,10 +132,13 @@ window.AD = window.AD || {};
     return {
       label: tpl(x.label, x.extra), icon: x.icon, hint: x.hint,
       chance: p, odds: p == null ? 'none' : odds,
+      why: p == null || odds !== 'exact' ? null : R.partsText(R.choiceParts(x.c, ctx())),
       act: () => {
         const ok = p == null || rng.chance(p);
         const o = ok ? x.ok : (x.fail || x.ok);
         const out = [L('> ' + tpl(x.label, x.extra), 'dim')];
+        if (x.use) S().inv[x.use]--;
+        if (x.c) practice(R.trains(x.c.s, ctx()), ok, out);
         if (x.sfx) AD.sfx[x.sfx]();
         apply(o, out, x.extra);
         onDone(o, out, ok);
@@ -181,10 +209,17 @@ window.AD = window.AD || {};
       { label: 'Op pad: kies een wijk', spot: 'wijk', icon: 'loc_wijk', act: E.districts },
       { label: 'Winkel van Ome Gerrit', spot: 'winkel', icon: 'loc_winkel', act: () => E.shop() },
       { label: `Garage (${s.garage.cars.length}/${s.garage.slots})`, spot: 'garage', icon: 'loc_garage', act: () => E.garage() },
+      { label: `Mijn crew (${s.crew.length}/${c.crew.maxSize})`, spot: 'crew', icon: 'act_crew', hint: s.crew.length ? 'Status, bonussen, bescherming en wapens' : 'Nog niemand: huur iemand in de kroeg', disabled: !s.crew.length, reason: 'Nog niemand: huur iemand in de kroeg', act: () => E.crew() },
       { label: 'Kroeg: crew inhuren', spot: 'kroeg', icon: 'loc_kroeg', act: () => E.bar() },
       { label: 'De Baas', spot: 'baas', icon: 'loc_baas', hint: `Schuld: ${fmt(s.debt)}`, act: () => E.boss() },
     ];
     if (s.health < c.health.max) ch.push({ label: 'Louche dokter', spot: 'dokter', icon: 'loc_dokter', hint: `${fmt((c.health.max - s.health) * c.health.doctorCostPerHp)} voor volledig herstel`, act: () => E.doctor() });
+    s.snitches.forEach(x => {
+      lines.push(L(`**${x.name}** zit vast en kan gaan praten (kans ${pct(x.p)} per dag, nog ${x.days} dagen).`, 'bad'));
+      if (!x.hush) ch.push({ label: `Zwijggeld voor ${x.name} (${fmt(c.crew.hushMoney)})`, icon: 'loc_baas', hint: 'Maakt de kans op klikken veel kleiner',
+        disabled: s.money < c.crew.hushMoney, reason: 'Te weinig geld',
+        act: () => { s.money -= c.crew.hushMoney; x.hush = true; x.p = Math.min(x.p, 0.05); E.hub([L(`De familie van ${x.name} pakt de envelop aan. Er wordt niks gezegd.`, 'good')]); } });
+    });
     if (s.skillPoints > 0) ch.push({ label: `Vaardigheden (${s.skillPoints} punt${s.skillPoints > 1 ? 'en' : ''})`, spot: 'skill', icon: 'loc_skill', act: () => E.skills() });
     ch.push({ label: `Onderduiken: 1 dag (${fmt(lieCost)})`, spot: 'huis', icon: 'loc_huis', hint: `Heat -${c.heat.lieLowDecay + c.heat.decayPerDay}`, disabled: s.money < lieCost, reason: 'Te weinig geld', act: () => E.lieLow() });
     ch.push({ label: 'Opslaan en stoppen', act: () => { AD.state.save(); E.title(); } });
@@ -199,6 +234,21 @@ window.AD = window.AD || {};
     s.health = Math.min(c.health.max, s.health + c.health.regenPerDay);
     s.crew.forEach(m => { m.hp = Math.min(100, m.hp + 25); });
     if (c.debt.interestPerDay && s.debt > 0) s.debt = Math.round(s.debt * (1 + c.debt.interestPerDay));
+    s.cleanDays = (s.cleanDays || 0) + 1;
+    if (s.record > 0 && s.cleanDays >= c.jail.expireDays) {
+      s.record--; s.cleanDays = 0;
+      lines.push(L(`Een aantekening op je **strafblad** is verjaard. Nog ${s.record}/${c.jail.maxConvictions}.`, 'good'));
+    }
+    Object.keys(s.districtHeat).forEach(k => { s.districtHeat[k] = Math.max(0, s.districtHeat[k] - c.districtHeat.decayPerDay); });
+    s.snitches = s.snitches.filter(x => {
+      if (rng.chance(x.p)) {
+        addHeat(18); addDistrictHeat(x.district, c.districtHeat.snitch);
+        const d = AD.DISTRICTS.find(q => q.id === x.district);
+        lines.push(L(`**${x.name} heeft geklikt!** De politie weet meer over je, en in de ${d.name} zoeken ze je. Blijf daar even weg.`, 'bad'));
+        return false;
+      }
+      return --x.days > 0;
+    });
     AD.crewGen.refresh();
     lines.push(L(`Dag ${s.day}. Huur betaald: ${fmt(c.rentPerDay)}.`, 'dim'));
   }
@@ -273,13 +323,7 @@ window.AD = window.AD || {};
 
   E.skills = function () {
     const s = S(), c = C();
-    const info = {
-      inbreken: ['Slotenkennis', 'Openbreken en starten'],
-      rijden: ['Rijden', 'Alles achter het stuur'],
-      rennen: ['Rennen', 'Te voet vluchten'],
-      gladheid: ['Praatjes', 'Smoesjes, omkopen, betere prijzen'],
-      schieten: ['Schieten', 'Vuurgevechten en vechten'],
-    };
+    const info = SKILLS;
     const ch = Object.keys(info).map(k => ({
       label: `${info[k][0]} (${s.skills[k]}/${c.maxSkill})`, hint: info[k][1] + `: +${pct(c.skillPerPoint)} per punt`,
       disabled: s.skills[k] >= c.maxSkill, reason: 'Maximaal',
@@ -302,6 +346,7 @@ window.AD = window.AD || {};
       ch.push({ label: 'Terug', act: () => E.hub() });
       return ui({ view: 'hub', title: 'Winkel', clear: true, lines, choices: ch });
     }
+    if (cat === 'armor') return E.armorShop(() => E.shop(), pre);
     const catDef = AD.SHOP_CATS.find(c => c.id === cat);
     lines.push(L(catDef.desc, 'dim'));
     const ch = Object.keys(AD.ITEMS).filter(id => AD.ITEMS[id].cat === cat && AD.ITEMS[id].price > 0).map(id => {
@@ -310,7 +355,7 @@ window.AD = window.AD || {};
       const locked = it.minLevel && s.level < it.minLevel;
       return {
         label: `${it.name}: ${fmt(it.price)}${it.consumable && s.inv[id] ? ` (je hebt ${s.inv[id]})` : ''}`,
-        icon: id, hint: it.desc,
+        icon: id, hint: it.desc + (R.toolKnow(id) >= 0.005 ? ` Jouw itemkennis: +${pct(R.toolKnow(id))}.` : ''),
         disabled: owned || locked || s.money < it.price,
         reason: owned ? 'Heb je al' : locked ? `Vanaf level ${it.minLevel}` : 'Te weinig geld',
         act: () => { s.money -= it.price; s.inv[id] = (s.inv[id] || 0) + 1; AD.sfx.cash(); E.shop(cat, [L(`Gekocht: ${it.name}.`, 'good')]); },
@@ -333,13 +378,12 @@ window.AD = window.AD || {};
       const role = AD.CREW_ROLES[h.role];
       return {
         label: `Inhuren: ${h.name}, ${role.name} (${fmt(h.cost)})`, icon: 'role_' + h.role, portrait: h.uid,
-        hint: `${role.desc} Kwaliteit ${Math.round(h.skill * 100)}%. Wil ${pct(h.cut)} van elke verkoop.`,
+        hint: `${cap(role.job)}: ${R.bonusText(h)}. Kwaliteit ${Math.round(h.skill * 100)}%, trouw ${pct(h.loyalty)}. Wil ${pct(h.cut)} van elke verkoop.`,
         disabled: s.crew.length >= max || s.money < h.cost, reason: s.crew.length >= max ? 'Crew is vol' : 'Te weinig geld',
         act: () => { s.money -= h.cost; s.crew.push(h); s.hires = s.hires.filter(x => x !== h); AD.sfx.cash(); E.bar([L(`${h.name} doet mee.`, 'good')]); },
       };
     });
-    s.crew.forEach(m => ch.push({ label: `Ontslaan: ${m.name}`, icon: 'role_' + m.role, portrait: m.uid,
-      act: () => { s.crew = s.crew.filter(x => x !== m); E.bar([L(`${m.name} pakt zijn jas en gaat.`, 'dim')]); } }));
+    if (s.crew.length) ch.push({ label: 'Mijn crew bekijken', icon: 'act_crew', act: () => E.crew() });
     ch.push({ label: 'Terug', act: () => E.hub() });
     ui({ view: 'hub', title: 'Kroeg', clear: true, lines, choices: ch });
   };
@@ -354,7 +398,7 @@ window.AD = window.AD || {};
     lines.push(L(s.garage.cars.length ? 'Je garage. Kies een auto.' : 'Je garage is leeg. Tijd om iets moois te stelen.', 'dim'));
     const ch = s.garage.cars.map(inst => {
       const car = def(inst);
-      return { label: `${car.name}: ${pct(inst.condition)} ${inst.hot ? '(heet)' : '(koud)'}`, icon: 'car_' + inst.id,
+      return { label: `${car.name}: ${pct(inst.condition)} ${inst.hot ? '(heet)' : '(koud)'}${s.getaway === inst.uid ? ' · vluchtauto' : ''}`, icon: 'car_' + inst.id,
         hint: `Tier ${car.tier}, marktwaarde ${fmt(car.value)}`, act: () => carMenu(inst.uid) };
     });
     if (s.garage.slots < c.garage.maxSlots) {
@@ -376,6 +420,10 @@ window.AD = window.AD || {};
     lines.push(L(`${car.name}, tier ${car.tier}. Staat ${pct(inst.condition)}. ${inst.hot ? 'Heet: herkenbaar als gestolen.' : 'Overgespoten en koud.'}`));
     const rc = R.repairCost(inst), sc = R.resprayCost(inst), cut = R.crewCut();
     const ch = [];
+    ch.push(s.getaway === inst.uid
+      ? { label: 'Niet meer als vluchtauto gebruiken', icon: 'act_drive', act: () => { s.getaway = null; carMenu(uid, [L('Hij blijft voortaan binnen.', 'dim')]); } }
+      : { label: 'Instellen als vluchtauto', icon: 'act_drive', hint: `Staat klaar als je moet vluchten. Snelheid ${pct(car.speed)}, wendbaar ${pct(car.handling)}, stevig ${pct(car.durability)}`,
+        act: () => { s.getaway = inst.uid; carMenu(uid, [L(`De ${car.name} staat vannacht om de hoek klaar.`, 'good')]); } });
     if (inst.condition < 1) ch.push({ label: `Repareren (${fmt(rc)})`, icon: 'svc_repair', disabled: s.money < rc, reason: 'Te weinig geld',
       act: () => { s.money -= rc; inst.condition = 1; AD.sfx.cash(); carMenu(uid, [L('Uitgedeukt en opgepoetst. Als nieuw.', 'good')]); } });
     if (inst.hot) ch.push({ label: `Overspuiten + nieuwe papieren (${fmt(sc)})`, icon: 'svc_spray', disabled: s.money < sc, reason: 'Te weinig geld',
@@ -385,12 +433,17 @@ window.AD = window.AD || {};
       ch.push({ label: `Verkopen aan ${b.name}: ${fmt(price * (1 - cut))}`, icon: 'buyer_' + b.id,
         hint: b.desc + (b.risk ? ` Risico: ${pct(b.risk)}.` : '') + (cut ? ` Crew krijgt ${pct(cut)}.` : ''),
         disabled: !!why, reason: why,
-        act: () => { const out = []; sell(inst, b, out); s.garage.cars = s.garage.cars.filter(x => x.uid !== uid); E.garage(out); } });
+        act: () => { const out = []; sell(inst, b, out); dropFromGarage(inst); E.garage(out); } });
     });
     ch.push({ label: 'Terug', act: () => E.garage() });
     ui({ view: 'hub', title: car.name, clear: true, lines, choices: ch, target: inst });
   }
 
+  function dropFromGarage(inst) {
+    const s = S();
+    s.garage.cars = s.garage.cars.filter(x => x.uid !== inst.uid);
+    if (s.getaway === inst.uid) s.getaway = null;
+  }
   function sell(inst, buyer, out) {
     const s = S(), car = def(inst);
     if (buyer.risk && rng.chance(buyer.risk)) {
@@ -413,7 +466,7 @@ window.AD = window.AD || {};
       const tiers = Object.keys(d.tierWeights);
       return {
         label: d.name, spot: d.id, icon: 'loc_wijk',
-        hint: `${d.desc} Politie: ${levelWord(d.police)}. Auto's: tier ${tiers[0]}-${tiers[tiers.length - 1]}.`,
+        hint: `${d.desc} Politie: ${levelWord(d.police)}. Auto's: tier ${tiers[0]}-${tiers[tiers.length - 1]}.${R.districtHeat(d.id) >= 20 ? ` De buurt is alert (${Math.round(R.districtHeat(d.id))}%).` : ''}`,
         disabled: s.level < d.minLevel, reason: `Vanaf level ${d.minLevel}`,
         act: () => startOuting(d),
       };
@@ -424,26 +477,33 @@ window.AD = window.AD || {};
   };
 
   function startOuting(d) {
-    run = { district: d, step: 0, suspicion: 0, tip: false, car: null, chase: null, target: null, spot: null, alerted: false };
+    run = { district: d, step: 0, suspicion: 0, snitch: 0, own: false, fight: null, tip: false, car: null, chase: null, target: null, spot: null, alerted: false };
     E.street([L(`Je trekt je capuchon over je hoofd en loopt de ${d.name} in.`, 'dim')]);
   }
 
   const maxSteps = () => C().street.maxSteps;
-  const streetTitle = () => `${run.district.name}: nacht ${Math.min(run.step, maxSteps())}/${maxSteps()}`;
+  const streetTitle = () => `${run.district.name}: straat ${Math.min(run.step, maxSteps())}/${maxSteps()}`;
   const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
   const fmtMin = m => (Math.round(m * 10) / 10).toString().replace('.', ',') + ' min';
 
   E.street = function (pre) {
     const lines = (pre || []).slice();
-    run.step++; run.car = null; run.chase = null; run.target = null; run.spot = null; run.alerted = false;
+    run.step++; run.car = null; run.own = false; run.fight = null; run.chase = null; run.block = null; run.target = null; run.spot = null; run.alerted = false;
     if (run.step > maxSteps()) {
       lines.push(L('De lucht kleurt grijs. Tijd om naar huis te gaan.', 'dim'));
       return E.goHome(lines);
     }
     run.suspicion += C().street.suspicionPerStep;
+    if (run.snitch && rng.chance(run.snitch * 0.5)) {
+      run.snitch = 0; run.suspicion += 30; addDistrictHeat(run.district.id, 20);
+      lines.push(L('Iemand heeft **geklikt**. De politie kamt deze wijk uit met jouw signalement.', 'bad'));
+      return streetEvent(pickEvent(AD.EVENTS.patrol), lines, true);
+    }
     if (rng.chance(R.patrolChance(run))) return streetEvent(pickEvent(AD.EVENTS.patrol), lines, true);
     if (rng.chance(C().street.eventChance)) return streetEvent(pickEvent(AD.EVENTS.street), lines, false);
-    encounter(spawnCar(), lines);
+    run.block = makeBlock();
+    run.spot = run.block.spot;
+    blockView(lines);
   };
 
   function streetEvent(ev, lines, police) {
@@ -484,6 +544,11 @@ window.AD = window.AD || {};
     const d = run.district;
     const places = AD.SPOTS.places.filter(p => !p.districts || p.districts.includes(d.id));
     const place = rng.weighted(places, p => p.weight || 1);
+    return spotAt(place);
+  }
+  const seeAt = place => place.see * (run.dark ? 0.6 : 1) * (run.weather === 'regen' ? 0.8 : 1);
+  function spotAt(place) {
+    const d = run.district;
     const range = AD.SPOTS.crowd[d.id] || [0, 2];
     const n = R.clamp(rng.int(range[0], range[1]) + (place.crowd || 0) + (run.crowd || 0) - (run.weather === 'regen' ? 2 : 0), 0, 4);
     const pool = AD.SPOTS.bystanders.filter(b => !b.districts || b.districts.includes(d.id));
@@ -493,8 +558,7 @@ window.AD = window.AD || {};
       const b = rng.pick(free.length ? free : pool);
       by.push({ id: b.id, text: b.text, call: b.call, leaves: b.leaves, state: 'rustig' });
     }
-    const see = place.see * (run.dark ? 0.6 : 1) * (run.weather === 'regen' ? 0.8 : 1);
-    return { place, see, by, attention: 0, called: false, eta: R.patrolEta(run), minutes: 0, tries: 0 };
+    return { place, see: seeAt(place), by, attention: 0, called: false, eta: R.patrolEta(run), minutes: 0, linesCut: false };
   }
 
   // Tijd laten verstrijken. Geeft 'police' terug als de politie er is.
@@ -505,11 +569,21 @@ window.AD = window.AD || {};
     sp.attention = R.clamp(sp.attention + noise, 0, 100);
     sp.by.forEach(b => {
       if (b.state === 'weg' || b.state === 'belt') return;
+      const indoor = b.id === 'raam' || b.id === 'portier';
+      if (b.state === 'loopt') {
+        b.callIn -= min;
+        if (b.callIn > 0) return;
+        if (sp.linesCut && !indoor) { b.state = 'kijkt'; lines.push(L(`${cap(b.text)} rammelt aan de hoorn, maar de **telefooncel is dood**.`, 'good')); return; }
+        b.state = 'belt';
+        lines.push(L(`${cap(b.text)} heeft een **telefoon** gevonden en **belt de politie**!`, 'bad'));
+        if (!sp.called) { sp.called = true; sp.eta = Math.min(sp.eta, rng.range(sc.callEta[0], sc.callEta[1])); }
+        return;
+      }
       if (rng.chance(R.noticeP(b, sp, 0, min))) {
         if (b.state === 'kijkt' || rng.chance(sc.callShare)) {
-          b.state = 'belt';
-          lines.push(L(`${cap(b.text)} heeft je **gezien** en **belt de politie**!`, 'bad'));
-          if (!sp.called) { sp.called = true; sp.eta = Math.min(sp.eta, rng.range(sc.callEta[0], sc.callEta[1])); }
+          b.state = 'loopt';
+          b.callIn = indoor ? 0.4 : rng.range(sc.phoneWalk[0], sc.phoneWalk[1]);
+          lines.push(L(indoor ? `${cap(b.text)} heeft je **gezien** en grijpt naar de **telefoon**!` : `${cap(b.text)} heeft je **gezien** en loopt naar een **telefooncel**!`, 'bad'));
         } else {
           b.state = 'kijkt';
           sp.attention = Math.min(100, sp.attention + 8);
@@ -542,15 +616,47 @@ window.AD = window.AD || {};
   function byText(sp) {
     const here = sp.by.filter(b => b.state !== 'weg');
     if (!here.length) return 'Er is niemand op straat.';
-    return 'In de buurt: ' + here.map(b => b.text + (b.state === 'kijkt' ? ' (**kijkt**)' : b.state === 'belt' ? ' (**belt**)' : '')).join(', ') + '.';
+    return 'In de buurt: ' + here.map(b => b.text + (b.state === 'kijkt' ? ' (**kijkt**)' : b.state === 'loopt' ? ' (**zoekt een telefoon**)' : b.state === 'belt' ? ' (**belt**)' : '')).join(', ') + '.';
   }
 
-  function encounter(inst, lines) {
+  // ---------- Het straatoverzicht: kies zelf op welke auto je afstapt ----------
+  function makeBlock() {
+    const [lo, hi] = C().street.carsPerStreet;
+    const n = rng.int(lo, hi), slots = AD.scene.BLOCK_SLOTS.map((_, i) => i).sort(() => Math.random() - 0.5);
+    const cars = [];
+    for (let i = 0; i < n; i++) {
+      const place = makeSpot().place;
+      cars.push({ inst: spawnCar(), place, see: seeAt(place), slot: slots[i] });
+    }
+    return { cars, spot: makeSpot(), seed: rng.int(1, 99999) };
+  }
+  const bestTool = car => R.owned('tool').map(t => ({ t, p: R.breakinChance(car, t.id) })).sort((a, b) => b.p - a.p)[0];
+
+  function blockView(lines) {
+    const b = run.block, sp = run.spot;
+    run.target = null;
+    scene('block', { district: run.district, cars: b.cars, spot: sp, seed: b.seed });
+    lines.push(L(`Je kijkt rond. Er staan **${b.cars.length} auto's** in deze straat. Klik er een aan, op de kaart of hieronder.`));
+    lines.push(L(byText(sp), 'info'));
+    const ch = b.cars.map((c, i) => {
+      const car = def(c.inst), best = bestTool(car);
+      const p = best ? R.clamp(best.p - (c.inst.tries || 0) * C().breakin.retryPenalty, C().breakin.min, C().breakin.max) : null;
+      return { label: `${car.name} (tier ${car.tier}), ${fmt(car.value)}`, spot: 'car' + i, icon: 'car_' + c.inst.id,
+        hint: `Staat ${c.place.text}. Alarm ${levelWord(car.alarm)}, slot ${levelWord(car.security)}.${c.inst.tries ? ' Al geprobeerd.' : ''}`,
+        chance: p, odds: p == null ? 'none' : 'exact', act: () => inspect(c, []) };
+    });
+    ch.push({ label: 'Volgende straat', icon: 'act_walk', act: () => walkAway(sp, []) });
+    ch.push({ label: 'Naar huis', icon: 'loc_huis', act: () => E.goHome() });
+    ui({ view: 'street', title: streetTitle(), clear: true, lines, choices: ch });
+  }
+
+  function inspect(c, lines) {
+    const inst = c.inst;
     run.target = inst;
-    run.spot = makeSpot();
+    Object.assign(run.spot, { place: c.place, see: c.see });
     const car = def(inst), sp = run.spot;
-    scene('street', { district: run.district, target: inst, phase: 'approach', seed: run.step, spot: sp });
-    lines.push(L(`Je loopt langs een **${car.name}** (tier ${car.tier}) ${sp.place.text}. Marktwaarde ongeveer **${fmt(car.value)}**.`));
+    scene('street', { district: run.district, target: inst, phase: 'approach', seed: run.block.seed + c.slot, spot: sp });
+    lines.push(L(`Je stapt af op een **${car.name}** (tier ${car.tier}) ${sp.place.text}. Marktwaarde ongeveer **${fmt(car.value)}**.`));
     lines.push(L(`Slot: ${levelWord(car.security)}. Elektronica: ${levelWord(car.tech)}. Alarm: ${levelWord(car.alarm)}. Startonderbreker: ${levelWord(car.immobilizer)}.`, 'dim'));
     lines.push(L(byText(sp), 'info'));
     encounterView(inst, lines);
@@ -558,20 +664,39 @@ window.AD = window.AD || {};
 
   // Het keuzemenu bij een auto (wordt na elke actie opnieuw getoond)
   function encounterView(inst, lines) {
-    const car = def(inst), sp = run.spot, b = C().breakin;
+    const car = def(inst), sp = run.spot, b = C().breakin, tries = inst.tries || 0;
     AD.scene.update({ phase: 'approach', spot: sp });
     const ch = R.owned('tool').map(t => {
-      const time = t.def.time * (1 + sp.tries * 0.3);
+      const time = t.def.time * (1 + tries * 0.3);
       const noise = R.actionNoise(time, t.def.noise);
-      const p = R.clamp(R.breakinChance(car, t.id) - sp.tries * b.retryPenalty, b.min, b.max);
-      const alarm = Math.min(0.95, R.alarmChance(car, t.id, true) + sp.tries * b.retryAlarmBonus);
+      const p = R.clamp(R.breakinChance(car, t.id) - tries * b.retryPenalty, b.min, b.max);
+      const alarm = Math.min(0.95, R.alarmChance(car, t.id, true) + tries * b.retryAlarmBonus);
       return {
-        label: (sp.tries ? 'Opnieuw: ' : 'Openbreken met ') + t.def.name.toLowerCase(), icon: t.id, chance: p, odds: 'exact',
+        label: (tries ? 'Opnieuw: ' : 'Openbreken met ') + t.def.name.toLowerCase(), icon: t.id, chance: p, odds: 'exact',
         hint: `${fmtMin(time)} · alarm ${pct(alarm)} · iemand ziet je: ${pct(R.actionRisk(sp, time, noise))}${t.def.startsCar ? ' · start ook de motor' : ''}`,
+        why: `${R.toolFit(t.def, car)}: ${R.partsText(R.breakinParts(car, t.id))}${tries ? ` − eerdere poging ${Math.round(tries * b.retryPenalty * 100)}` : ''}`,
         act: () => breakin(inst, t.id),
       };
     });
     ch.sort((a, c) => c.chance - a.chance);
+    sp.by.filter(x => x.state === 'loopt').forEach(x => {
+      const spec = { b: 0.5, s: 'gladheid', w: 2 }, p = R.choiceChance(spec);
+      ch.push({ label: `${cap(x.text)} tegenhouden met een praatje`, icon: 'act_talk', chance: p, odds: 'vague', act: () => {
+        const out = [L('> "Wacht even, dit is een misverstand! Het is de auto van mijn zwager."', 'dim')], ok = rng.chance(p);
+        practice('gladheid', ok, out);
+        if (ok) { x.state = 'weg'; out.push(L('Gemompel, een schouderklopje, en het gevaar loopt de straat uit.', 'good')); }
+        else { x.callIn = 0; out.push(L('"Dat kun je aan de politie uitleggen."', 'bad')); }
+        if (tick(0.3, 0, out) === 'police') return copsArrive(null, out);
+        encounterView(inst, out);
+      } });
+    });
+    if (R.has('kniptang') && !sp.linesCut && sp.by.some(x => x.state !== 'weg')) ch.push({ label: 'De telefooncel doorknippen (0,5 min)', icon: 'kniptang', hint: 'Niemand op straat kan nog bellen. Een huistelefoon wel.',
+      act: () => {
+        const out = [L('> Knip. De kiestoon is weg.', 'dim')];
+        sp.linesCut = true;
+        if (tick(0.5, 4, out) === 'police') return copsArrive(null, out);
+        encounterView(inst, out);
+      } });
     if (sp.by.some(x => x.state !== 'weg') || sp.attention > 15) {
       const w = C().scene.waitTime;
       ch.push({ label: `Wachten tot de kust veilig is (${fmtMin(w)})`, icon: 'act_hide', hint: `Omstanders lopen misschien door, aandacht zakt · risico ${pct(R.actionRisk(sp, w, -15))}`,
@@ -583,8 +708,8 @@ window.AD = window.AD || {};
           encounterView(inst, out);
         } });
     }
-    ch.push({ label: sp.attention > 40 || sp.called ? 'Afhaken: rustig weglopen' : 'Doorlopen naar de volgende auto', icon: 'act_walk',
-      act: () => walkAway(sp, []) });
+    if (sp.called || sp.attention > 60 || !run.block) ch.push({ label: 'Afhaken: rustig weglopen', icon: 'act_walk', act: () => walkAway(sp, []) });
+    else ch.push({ label: 'Terug naar het straatoverzicht', icon: 'act_walk', act: () => blockView([]) });
     ch.push({ label: 'Naar huis', act: () => E.goHome() });
     ui({ view: 'street', title: streetTitle(), clear: true, lines, choices: ch, target: inst });
   }
@@ -592,7 +717,7 @@ window.AD = window.AD || {};
   // Weglopen gaat bijna altijd goed; alleen als je al gezien bent kan iemand je volgen
   function walkAway(sp, out) {
     out.push(L('> Je stopt je gereedschap weg en loopt rustig de straat uit.', 'dim'));
-    const watching = sp ? sp.by.filter(x => x.state === 'kijkt' || x.state === 'belt').length : 0;
+    const watching = sp ? sp.by.filter(x => x.state !== 'weg' && x.state !== 'rustig').length : 0;
     const p = sp ? R.clamp(watching * 0.12 + (sp.called && sp.eta < 1.5 ? 0.35 : 0) - R.statBonus('gladheid'), 0, 0.7) : 0;
     if (rng.chance(p)) {
       out.push(L('"Daar loopt hij!" Een agent stapt uit en komt op je af. **Rennen!**', 'bad'));
@@ -604,22 +729,25 @@ window.AD = window.AD || {};
 
   function breakin(inst, toolId) {
     const car = def(inst), tool = AD.ITEMS[toolId], b = C().breakin, sp = run.spot;
-    const tries = sp.tries;
+    const tries = inst.tries || 0;
     const time = tool.time * (1 + tries * 0.3);
     const p = R.clamp(R.breakinChance(car, toolId) - tries * b.retryPenalty, b.min, b.max);
     const ok = rng.chance(p);
     const alarm = rng.chance(R.clamp(R.alarmChance(car, toolId, ok) + tries * b.retryAlarmBonus, 0, 0.95));
-    sp.tries++;
+    inst.tries = tries + 1;
+    S().toolUse[toolId] = (S().toolUse[toolId] || 0) + 1;
     const lines = [L(`> Je zet je ${tool.name.toLowerCase()} op het slot van de ${car.name}... (${fmtMin(time)})`, 'dim')];
     AD.sfx.click();
     AD.scene.update({ phase: 'working' });
+    practice('inbreken', ok, lines);
+    if (ok && tool.carDamage) { inst.condition = Math.max(0.2, inst.condition - tool.carDamage); lines.push(L(`Glas op de stoel: de auto is nog ${pct(inst.condition)} waard.`, 'dim')); }
     const arrived = tick(time, R.actionNoise(time, tool.noise) + (ok ? 0 : 8), lines);
     if (alarm) return triggerAlarm(inst, lines, ok);
     if (arrived === 'police') return copsArrive(ok ? inst : null, lines);
     if (ok) {
       lines.push(L('Klik. De deur is **open**.', 'good'));
       if (rng.chance(b.ownerChance)) return owner(inst, lines);
-      if (tool.startsCar) { lines.push(L('Het relay-kastje piept. De motor slaat aan. Geen draadje nodig.', 'good')); return started(inst, lines); }
+      if (tool.startsCar) { lines.push(L('De codegrabber piept. De motor slaat aan. Geen draadje nodig.', 'good')); return started(inst, lines); }
       return opened(inst, 0, lines);
     }
     lines.push(L(`Het slot geeft niet mee. Aandacht: **${Math.round(sp.attention)}%**.`));
@@ -631,7 +759,8 @@ window.AD = window.AD || {};
     const sp = run.spot, sc = C().scene;
     AD.sfx.alarm(); addHeat(C().heatGain.alarm);
     sp.attention = 100;
-    sp.by.forEach(x => { if (x.state !== 'weg') x.state = x.state === 'belt' ? 'belt' : 'kijkt'; });
+    sp.by.forEach(x => { if (x.state === 'rustig') x.state = 'kijkt'; });
+    addDistrictHeat(run.district.id, C().districtHeat.alarm);
     if (!sp.called) { sp.called = true; sp.eta = Math.min(sp.eta, rng.range(sc.callEta[0] + 0.5, sc.callEta[1] + 1)); }
     lines.push(L(open ? 'De deur is open... maar het **ALARM** gaat af!' : 'Het **ALARM** gaat af!', 'bad'));
     lines.push(L(`Iemand heeft de politie gebeld. Je hebt nog even: ${etaWord(sp)}.`, 'bad'));
@@ -644,7 +773,7 @@ window.AD = window.AD || {};
     const st = R.bestStarter(car);
     const stTime = st ? st.def.time : 2;
     const pStart = R.startChance(car, c.start.panicPenalty);
-    const pSneak = R.clamp(0.75 - sp.by.filter(x => x.state === 'kijkt' || x.state === 'belt').length * 0.15 + R.statBonus('gladheid') * 2, 0.15, 0.95);
+    const pSneak = R.clamp(0.75 - sp.by.filter(x => x.state !== 'weg' && x.state !== 'rustig').length * 0.15 + R.statBonus('gladheid') * 2, 0.15, 0.95);
     const pRun = R.clamp(sp.eta / 4 + R.statBonus('rennen'), 0.2, 0.95);
     const ch = [];
     if (open) ch.push({ label: 'Toch starten en wegscheuren', icon: st ? st.id : 'hotwirekit', chance: pStart, odds: 'exact',
@@ -664,16 +793,27 @@ window.AD = window.AD || {};
       } });
     ch.push({ label: 'Afhaken: rustig weglopen alsof je niks met die auto te maken hebt', icon: 'act_walk', chance: pSneak, odds: 'vague', act: () => {
       const out = [L('> Handen in je zakken, rustig de straat uit.', 'dim')];
-      if (rng.chance(pSneak)) { run.suspicion += 15; out.push(L('Niemand houdt je tegen. Achter je loeit het alarm nog.', 'good')); return E.street(out); }
+      if (roll(pSneak, 'gladheid', out)) { run.suspicion += 15; out.push(L('Niemand houdt je tegen. Achter je loeit het alarm nog.', 'good')); return E.street(out); }
       out.push(L('"Dat is hem!" Iemand wijst naar je.', 'bad'));
       E.footChase(R.etaDistance(sp.eta) + 10, out);
     } });
     ch.push({ label: 'Wegrennen', icon: 'sneakers', chance: pRun, odds: 'vague', hint: 'Hoe verder de politie nog is, hoe makkelijker', act: () => {
       const out = [L('> Je zet het op een lopen.', 'dim')];
-      if (rng.chance(pRun)) { run.suspicion += 20; out.push(L('Je bent al twee straten verder als de sirenes aankomen. **Ontkomen.**', 'good')); return E.street(out); }
+      if (roll(pRun, 'rennen', out)) { run.suspicion += 20; out.push(L('Je bent al twee straten verder als de sirenes aankomen. **Ontkomen.**', 'good')); return E.street(out); }
       out.push(L('Een politiewagen komt net de hoek om en ziet je rennen!', 'bad'));
       E.footChase(R.etaDistance(sp.eta) + 15, out);
     } });
+    const gw = getawayCar();
+    if (gw) {
+      const p = R.choiceChance({ b: 0.75, s: 'rennen', w: 1 });
+      ch.push({ label: `Naar je vluchtauto (${def(gw).name})`, icon: 'act_drive', chance: p, odds: 'vague', hint: `Om de hoek · ${etaWord(sp)}`, act: () => {
+        const out = [L('> Je sprint naar je eigen auto.', 'dim')], ok = rng.chance(p);
+        practice('rennen', ok, out);
+        if (!ok) { out.push(L('Je struikelt, en precies dan komt de politie de hoek om.', 'bad')); return E.footChase(R.etaDistance(sp.eta), out); }
+        if (sp.eta > 1) { run.suspicion += 8; out.push(L(`Je rijdt rustig weg in je ${def(gw).name}. In je spiegel zie je pas veel later zwaailichten.`, 'good')); return E.street(out); }
+        takeGetaway(out); E.carChase(R.etaDistance(sp.eta) + 15, out);
+      } });
+    }
     const pHide = R.choiceChance({ b: 0.45, s: 'gladheid', w: 1.5, h: -0.003 });
     ch.push({ label: 'Verstoppen achter een container', icon: 'act_hide', chance: pHide, odds: 'vague', act: () => hide(pHide) });
     ui({ view: 'street', title: 'ALARM!', clear: true, lines, target: inst, choices: ch });
@@ -681,7 +821,7 @@ window.AD = window.AD || {};
 
   function hide(p) {
     const out = [L('> Je duikt weg achter een vuilcontainer.', 'dim')];
-    if (rng.chance(p)) {
+    if (roll(p, 'gladheid', out)) {
       run.suspicion += 20;
       AD.scene.update({ phase: 'idle', target: null });
       out.push(L('Een politieauto rijdt stapvoets voorbij. Het zoeklicht glijdt over de container... en verder. **Niet gezien.**', 'good'));
@@ -711,11 +851,21 @@ window.AD = window.AD || {};
     }
     const pCool = R.choiceChance({ b: 0.35, s: 'gladheid', w: 2, h: -0.004 });
     ch.push({ label: 'Doen alsof je op de bus wacht', icon: 'act_talk', chance: pCool, odds: 'vague', act: () => {
-      const out = [L('> Je kijkt op je telefoon en zucht diep.', 'dim')];
-      if (rng.chance(pCool)) { run.suspicion += 15; out.push(L('De agenten kijken rond, praten met een buurman... en rijden weer weg. **Niet gezien.**', 'good')); return E.street(out); }
+      const out = [L('> Je kijkt op je horloge en zucht diep.', 'dim')];
+      if (roll(pCool, 'gladheid', out)) { run.suspicion += 15; out.push(L('De agenten kijken rond, praten met een buurman... en rijden weer weg. **Niet gezien.**', 'good')); return E.street(out); }
       out.push(L('"Meneer? Mogen wij even uw zakken zien?" **Rennen!**', 'bad'));
       E.footChase(22, out);
     } });
+    const gw = getawayCar();
+    if (gw) {
+      const p = R.choiceChance({ b: 0.55, s: 'rennen', w: 1.2 });
+      ch.push({ label: `Naar je vluchtauto sprinten (${def(gw).name})`, icon: 'act_drive', chance: p, odds: 'vague', act: () => {
+        const out = [L('> Sleutels in je hand, rennen.', 'dim')], ok = rng.chance(p);
+        practice('rennen', ok, out);
+        if (ok) { takeGetaway(out); return E.carChase(Math.round(35 + def(gw).speed * 25), out); }
+        out.push(L('Ze snijden je de weg af.', 'bad')); E.footChase(25, out);
+      } });
+    }
     ch.push({ label: 'Wegrennen', icon: 'sneakers', act: () => E.footChase(35, [L('> Je rent de eerste steeg in.', 'dim')]) });
     ui({ view: 'chase', title: 'POLITIE!', clear: true, lines, choices: ch });
   }
@@ -729,9 +879,12 @@ window.AD = window.AD || {};
     const ch = [
       { label: tries ? 'Nog eens proberen te starten' : 'Motor starten', icon: st ? st.id : 'hotwirekit', chance: p, odds: 'exact',
         hint: `${fmtMin(time)} · mislukken kan het alarm laten afgaan · iemand ziet je: ${pct(R.actionRisk(sp, time, R.actionNoise(time, 0)))}`,
+        why: R.partsText(R.startParts(car)) + (tries ? ` − eerdere poging ${Math.round(tries * C().start.retryPenalty * 100)}` : ''),
         act: () => {
           const out = [L('> Je prutst aan de bedrading...', 'dim')];
           const ok = rng.chance(p);
+          if (st) S().toolUse[st.id] = (S().toolUse[st.id] || 0) + 1;
+          practice('inbreken', ok, out);
           const arrived = tick(time, R.actionNoise(time, 0), out);
           if (ok) { out.push(L('VROEM! De motor slaat aan.', 'good')); return started(inst, out); }
           if (rng.chance(C().start.failAlarm + tries * 0.08)) { out.push(L('Verkeerde draad!', 'bad')); return triggerAlarm(inst, out, true); }
@@ -746,8 +899,10 @@ window.AD = window.AD || {};
 
   function takeCar(inst) {
     if (run.car === inst) return;
-    run.car = inst;
+    run.car = inst; run.own = false;
     S().stats.stolen++;
+    S().modelUse[inst.id] = (S().modelUse[inst.id] || 0) + 1;
+    addDistrictHeat(run.district.id, C().districtHeat.theft);
     addHeat(C().heatGain.theftPerTier * def(inst).tier);
   }
 
@@ -770,7 +925,7 @@ window.AD = window.AD || {};
       } },
       { label: 'Smoesje: "Ik ben van de wegenwacht"', icon: 'act_talk', chance: pTalk, odds: 'vague', act: () => {
         const out = [L('> "Goedenavond meneer, melding van een accustoring."', 'dim')];
-        if (rng.chance(pTalk)) { out.push(L('Hij krabt op zijn hoofd. "O... nou, ga je gang." Hij loopt door.', 'good')); return opened(inst, 0, out); }
+        if (roll(pTalk, 'gladheid', out)) { out.push(L('Hij krabt op zijn hoofd. "O... nou, ga je gang." Hij loopt door.', 'good')); return opened(inst, 0, out); }
         out.push(L('Hij gelooft er niks van en **belt 112**.', 'bad')); addHeat(4);
         sp.called = true; sp.eta = Math.min(sp.eta, rng.range(2, 4)); sp.attention = 90;
         opened(inst, 0, out);
@@ -821,7 +976,7 @@ window.AD = window.AD || {};
       { label: 'Uitstappen en wegrennen', icon: 'sneakers', hint: 'De auto ben je kwijt', act: () => E.footChase(dist + 5, [L('> Je springt eruit en rent een steeg in.', 'dim')]) },
       { label: 'Rustig doorrijden, niks aan de hand', icon: 'act_talk', chance: pCool, odds: 'vague', act: () => {
         const out = [L('> Richting aan, netjes 50.', 'dim')];
-        if (rng.chance(pCool)) {
+        if (roll(pCool, 'gladheid', out)) {
           out.push(L('Ze halen je in... en rijden door. **Pfoe.**', 'good'));
           addXp(C().xp.perTier * def(run.car).tier, out);
           return deliver(out);
@@ -835,19 +990,54 @@ window.AD = window.AD || {};
   // =============================================================
   //  ACHTERVOLGING
   // =============================================================
+  // ---------- Vluchtauto ----------
+  function getawayCar() {
+    const s = S();
+    return run.own ? null : s.garage.cars.find(x => x.uid === s.getaway && x.condition > C().chase.wreckAt) || null;
+  }
+  function takeGetaway(out) {
+    const g = getawayCar();
+    run.car = g; run.own = true;
+    out.push(L(`Je springt in je **vluchtauto**, de ${def(g).name}.`, 'good'));
+  }
+  function loseCar(lines) {
+    if (!run.car) return;
+    lines.push(L(run.own ? `Je laat je **vluchtauto** achter. De ${def(run.car).name} ben je kwijt.` : `Je laat de ${def(run.car).name} achter.`, 'bad'));
+    if (run.own) dropFromGarage(run.car);
+    run.car = null; run.own = false;
+  }
+
+  // ---------- Iemand achterlaten die de politie ophoudt ----------
+  function leaveBehind(m, out) {
+    const s = S(), c = C().crew;
+    s.crew = s.crew.filter(x => x !== m);
+    s.crew.forEach(x => { x.loyalty = Math.max(0.05, x.loyalty - 0.1); });
+    const p = R.snitchChance(m);
+    s.snitches.push({ uid: m.uid, name: m.name, district: run.district.id, p: p / 2, days: 3 });
+    run.snitch = Math.max(run.snitch || 0, p);
+    out.push(L(`**${m.name}** draait zich om en houdt de politie op. Dat kost je een crewlid.`, 'bad'));
+    out.push(L(`Trouw was ${pct(m.loyalty)}: het kan zijn dat er geklikt wordt. Wegblijven uit deze wijk is slim.`, 'info'));
+  }
+  function leaveChoices(after) {
+    return S().crew.map(m => ({ label: `${m.name} achterlaten`, icon: 'role_' + m.role, portrait: m.uid,
+      hint: `Houdt ze op (+${C().crew.holdGain} voorsprong). Trouw ${pct(m.loyalty)}, kans op klikken ${pct(R.snitchChance(m))}`,
+      act: () => { const out = [L(`> "${m.name.split(' ')[0]}, jij houdt ze tegen!"`, 'dim')]; leaveBehind(m, out); after(out); } }));
+  }
+
   E.carChase = function (dist, lines) {
     const s = S();
-    run.chase = { mode: 'car', distance: dist, round: 0, units: 1 + Math.floor(s.heat / 35), used: new Set(), next: null, history: [dist] };
-    s.stats.chases++; addHeat(C().heatGain.chase);
+    const prev = run.chase;
+    run.chase = { mode: 'car', distance: dist, round: 0, units: prev ? prev.units : 1 + Math.floor(s.heat / 35), used: prev ? prev.used : new Set(), next: null, history: prev ? prev.history.concat([dist]) : [dist] };
+    if (!prev) { s.stats.chases++; addHeat(C().heatGain.chase); addDistrictHeat(run.district.id, C().districtHeat.chase); }
     AD.sfx.siren(true);
     chaseRound(lines);
   };
 
   E.footChase = function (dist, lines) {
     const s = S();
-    if (run.car) { lines.push(L(`Je laat de ${def(run.car).name} achter.`, 'bad')); run.car = null; }
+    loseCar(lines);
     const units = run.chase ? run.chase.units : 1 + Math.floor(s.heat / 40);
-    if (!run.chase) { s.stats.chases++; addHeat(C().heatGain.chase); }
+    if (!run.chase) { s.stats.chases++; addHeat(C().heatGain.chase); addDistrictHeat(run.district.id, C().districtHeat.chase); }
     const history = run.chase ? run.chase.history.concat([dist]) : [dist];
     const used = run.chase ? run.chase.used : new Set();
     run.chase = { mode: 'foot', distance: dist, round: 0, units, used, next: null, history };
@@ -855,17 +1045,6 @@ window.AD = window.AD || {};
     chaseRound(lines);
   };
 
-  function weaponChoice(w) {
-    return {
-      label: `Terugschieten met ${w.def.name.toLowerCase()}`, icon: w.id, sfx: 'shots',
-      c: { b: 0.25 + w.def.power, s: 'schieten', w: 1.5 },
-      ok: { gain: [16, 26], heat: w.def.heat, units: -1, text: rng.pick([
-        'Je raakt hun motorblok. Die wagen rijdt niet meer.',
-        'Ze duiken weg achter hun portieren en verliezen terrein.',
-        'Een band klapt. De politiewagen tolt de berm in.']) },
-      fail: { hurt: [12, 26], heat: w.def.heat, loss: [4, 8], text: 'Je mist. Zij niet.' },
-    };
-  }
   function meleeChoice(w) {
     return {
       label: `Neerslaan met ${w.def.name.toLowerCase()}`, icon: w.id, sfx: 'hit',
@@ -874,14 +1053,23 @@ window.AD = window.AD || {};
       fail: { loss: [12, 18], hurt: [5, 15], heat: w.def.heat, text: 'Hij ontwijkt en grijpt je arm.' },
     };
   }
-  function crewChoice() {
-    const names = R.crewShooters().map(m => m.name.split(' ')[0]).join(' en ');
+  // Eén agent achter je: uitschakelen en dan makkelijk weg
+  function stunChoice(w) {
     return {
-      label: `Crew vuurt terug (${names})`, icon: 'act_crew', sfx: 'shots', extra: { crew: names },
-      c: { b: 0.3 + R.crewFirepower(), s: 'schieten', w: 0.5 },
-      ok: { gain: [18, 28], heat: 10, units: -1, text: '{crew} laat de ruiten van de politiewagen uiteenspatten!' },
-      fail: { crewHit: [35, 70], loss: [4, 8], heat: 8, text: 'Ze schieten terug!' },
+      label: `De agent uitschakelen met je ${w.def.name.toLowerCase()}`, icon: w.id, sfx: 'hit', hint: 'Er is er maar één',
+      c: { b: 0.5 + w.def.power, s: 'vechten', w: 1.2 },
+      ok: { gain: [38, 48], heat: w.def.heat, text: 'Hij zakt door zijn knieën. Tegen de tijd dat hij overeind is, ben jij drie straten verder.' },
+      fail: { loss: [12, 18], hurt: [4, 10], heat: w.def.heat, text: 'Hij stapt opzij en grijpt je mouw.' },
     };
+  }
+  function itemChoices(odds, done) {
+    const mode = run.chase.mode;
+    return R.owned('escape').filter(x => x.def.escape.modes.includes(mode)).map(x =>
+      eventChoice(Object.assign({ icon: x.id, use: x.id, hint: `Je hebt er ${S().inv[x.id]}. ${x.def.desc}` }, x.def.escape), odds, done));
+  }
+  // Submenu binnen een achtervolging: kost niets, je kunt altijd terug
+  function subMenu(title, text, list, back) {
+    ui({ view: 'chase', title, clear: true, lines: [L(text, 'info')], target: run.car, choices: list.concat([{ label: 'Terug', act: back }]) });
   }
 
   function chaseRound(lines) {
@@ -910,15 +1098,40 @@ window.AD = window.AD || {};
       if (o.end === 'footChase') return E.footChase(o.dist || 30, out);
       afterChaseChoice(out);
     };
-    const choices = ev.choices.filter(x => !x.req || x.req(ctx())).map(x => eventChoice(x, odds, done));
-    if (ev.weapons) R.rangedWeapons().forEach(w => choices.push(eventChoice(weaponChoice(w), odds, done)));
-    if (ev.melee) R.weapons().filter(w => !w.def.ranged).forEach(w => choices.push(eventChoice(meleeChoice(w), odds, done)));
-    if (ev.crew && R.crewShooters().length) choices.push(eventChoice(crewChoice(), odds, done));
-    if (ch.mode === 'car') choices.push({ label: 'Uitstappen en verder rennen', icon: 'sneakers', hint: 'Auto kwijt, je houdt een deel van je voorsprong',
-      act: () => E.footChase(Math.round(ch.distance * c.bailOutKeep), [L('> Handrem, portier open, rennen!', 'dim')]) });
-    if (R.has('ehbo') && s.health < 70) choices.push({ label: 'EHBO-doos gebruiken', icon: 'ehbo', hint: `+${AD.ITEMS.ehbo.heal} gezondheid, kost wat voorsprong`,
-      act: () => { s.inv.ehbo--; s.health = Math.min(100, s.health + AD.ITEMS.ehbo.heal); ch.distance -= 8; afterChaseChoice([L('> Je drukt een verband op de wond.', 'dim')]); } });
-    ui({ view: 'chase', title: ch.mode === 'car' ? 'ACHTERVOLGING' : 'TE VOET OP DE VLUCHT', clear: true, lines, choices, target: run.car });
+    const view = () => {
+      const choices = [];
+      const add = list => list.forEach(x => choices.push(x));
+      const canFight = shooting || (ch.mode === 'foot' && ch.distance < 30);
+      if (canFight) choices.push(E.fightChoice('chase', null));
+      add(ev.choices.filter(x => !x.req || x.req(ctx())).map(x => eventChoice(x, odds, done)));
+      if (ch.mode === 'foot' && ch.units === 1) add(R.weapons().filter(w => w.def.stun).map(w => eventChoice(stunChoice(w), odds, done)));
+      else if (ev.melee) add(R.weapons().filter(w => !w.def.ranged).map(w => eventChoice(meleeChoice(w), odds, done)));
+      const gw = ch.mode === 'foot' ? getawayCar() : null;
+      if (gw) {
+        const spec = { b: 0.5, s: 'rennen', w: 1.2 }, p = R.choiceChance(spec, ctx());
+        choices.push({ label: `Naar je vluchtauto rennen (${def(gw).name})`, icon: 'act_drive', chance: p, odds, why: odds === 'exact' ? R.partsText(R.choiceParts(spec, ctx())) : null, act: () => {
+          const out = [L('> Nog één hoek om naar je auto.', 'dim')], ok = rng.chance(p);
+          practice('rennen', ok, out);
+          if (ok) { takeGetaway(out); return E.carChase(Math.min(90, Math.round(ch.distance + 8 + def(gw).speed * 10)), out); }
+          ch.distance -= rng.int(8, 14); out.push(L('Er staat een agent tussen jou en je auto.', 'bad'));
+          afterChaseChoice(out);
+        } });
+      }
+      const items = itemChoices(odds, done);
+      if (items.length > 1) choices.push({ label: `Vluchtmiddel gebruiken (${items.length})`, icon: 'rookbom', hint: 'Kraaienpoten, rookbom en ander spul', act: () => subMenu('VLUCHTMIDDELEN', 'Wat gebruik je?', items, view) });
+      else add(items);
+      if (S().crew.length && ch.distance < 60) {
+        const leave = leaveChoices(out => { ch.distance += C().crew.holdGain; afterChaseChoice(out); });
+        if (leave.length > 1) choices.push({ label: 'Iemand achterlaten...', icon: 'act_crew', hint: 'Een crewlid houdt de politie op', act: () => subMenu('WIE BLIJFT ACHTER?', 'Wie je achterlaat wordt gepakt, en kan gaan praten.', leave, view) });
+        else add(leave);
+      }
+      if (ch.mode === 'car') choices.push({ label: 'Uitstappen en verder rennen', icon: 'sneakers', hint: 'Auto kwijt, je houdt een deel van je voorsprong',
+        act: () => E.footChase(Math.round(ch.distance * c.bailOutKeep), [L('> Handrem, portier open, rennen!', 'dim')]) });
+      if (R.has('ehbo') && s.health < 70) choices.push({ label: 'EHBO-doos gebruiken', icon: 'ehbo', hint: `+${AD.ITEMS.ehbo.heal} gezondheid, kost wat voorsprong`,
+        act: () => { s.inv.ehbo--; s.health = Math.min(100, s.health + AD.ITEMS.ehbo.heal); ch.distance -= 8; afterChaseChoice([L('> Je drukt een verband op de wond.', 'dim')]); } });
+      ui({ view: 'chase', title: canFight ? 'VECHTEN OF VLUCHTEN?' : ch.mode === 'car' ? 'ACHTERVOLGING' : 'TE VOET OP DE VLUCHT', clear: true, lines, choices, target: run.car });
+    };
+    view();
   }
 
   // Na elke keuze: politie loopt in of je loopt uit. Laat zien waardoor.
@@ -939,6 +1152,10 @@ window.AD = window.AD || {};
     if (S().health <= 0) return E.gameOver('wasted', out);
     if (ch.distance >= C().chase.escapeAt) return chaseEscaped(out);
     if (ch.distance <= 0) return E.arrest(out);
+    if (ch.distance >= C().chase.loseSightAt && S().heat < C().chase.heliHeat && rng.chance(C().chase.loseSightChance)) {
+      out.push(L('Ze zijn je **kwijt**. Geen camera\'s, geen helikopter: ze weten gewoon niet meer waar je bent.', 'good'));
+      return chaseEscaped(out);
+    }
     out.push(L(distanceText(ch.distance), ch.distance < 25 ? 'bad' : 'dim'));
     chaseRound(out);
   }
@@ -948,6 +1165,12 @@ window.AD = window.AD || {};
     addHeat(C().heatGain.escape); S().stats.escapes++;
     const wasCar = run.chase && run.chase.mode === 'car' && run.car;
     run.chase = null;
+    if (wasCar && run.own) {
+      out.push(L(`Je bent ze kwijt! Je ${def(run.car).name} staat weer om de hoek (${pct(run.car.condition)}).`, 'good'));
+      run.car = null; run.own = false;
+      addXp(10 + C().xp.chaseBonus, out);
+      return freeOnFoot(out);
+    }
     if (wasCar) {
       const car = def(run.car);
       out.push(L('Je bent ze kwijt! De sirenes sterven weg.', 'good'));
@@ -959,10 +1182,19 @@ window.AD = window.AD || {};
     freeOnFoot(out);
   }
 
+  // Te heet onder je voeten? Verplaats je naar een andere wijk
+  function fleeChoices() {
+    if (run.step >= maxSteps()) return [];
+    return AD.DISTRICTS.filter(d => d !== run.district && S().level >= d.minLevel).slice(0, 2).map(d => ({
+      label: `Vluchten naar: ${d.name}`, icon: 'loc_wijk', hint: 'Weg uit deze buurt. Niemand kent je daar vannacht.',
+      act: () => { Object.assign(run, { district: d, suspicion: 0, snitch: 0, weather: null, dark: false, policeBusy: false, crowd: 0 }); E.street([L(`Je neemt de nachttram naar de ${d.name}.`, 'dim')]); } }));
+  }
+
   function freeOnFoot(out) {
     scene('street', { district: run.district, phase: 'idle', seed: run.step + 50 });
     const ch = [];
-    if (run.step < maxSteps()) ch.push({ label: 'Verder zoeken in de wijk', hint: 'De politie is nog alert', act: () => { run.suspicion += 15; E.street(); } });
+    if (run.step < maxSteps()) ch.push({ label: 'Verder zoeken in de wijk', hint: run.snitch ? 'Riskant: er kan geklikt worden' : 'De politie is nog alert', act: () => { run.suspicion += 15; E.street(); } });
+    fleeChoices().forEach(x => ch.push(x));
     ch.push({ label: 'Naar huis', act: () => E.goHome() });
     ui({ view: 'street', title: 'Ontkomen', clear: true, lines: out, choices: ch });
   }
@@ -983,39 +1215,17 @@ window.AD = window.AD || {};
       { label: `Omkopen (${fmt(bribe)})`, icon: 'loc_baas', chance: pBribe, odds: 'vague', disabled: s.money < bribe, reason: 'Niet genoeg geld', act: () => {
         s.money -= bribe; addHeat(c.heatGain.bribe);
         const out = [L(`> Je schuift ${fmt(bribe)} over.`, 'dim')];
-        if (rng.chance(pBribe)) { out.push(L('De agent stopt het geld weg en kijkt de andere kant op.', 'good')); return freed(out); }
+        if (roll(pBribe, 'gladheid', out)) { out.push(L('De agent stopt het geld weg en kijkt de andere kant op.', 'good')); return freed(out); }
         out.push(L('"Poging tot omkoping. Dat komt er ook nog bij."', 'bad'));
         E.jail(out);
       } },
     ];
-    R.weapons().forEach(w => {
-      const p = R.choiceChance({ b: 0.15 + w.def.power, s: w.def.ranged ? 'schieten' : 'vechten', w: 1.5 });
-      choices.push({ label: (w.def.ranged ? 'Schieten met ' : 'Vechten met ') + w.def.name.toLowerCase(), icon: w.id, chance: p, odds: 'vague', act: () => {
-        AD.sfx[w.def.ranged ? 'shots' : 'hit']();
-        addHeat(w.def.heat + c.heatGain.fightCop);
-        const out = [L(`> Je trekt je ${w.def.name.toLowerCase()}!`, 'dim')];
-        if (rng.chance(p)) { out.push(L('Ze duiken weg. Je bent los!', 'good')); return resume(out, 30); }
-        hurt(rng.int(15, 35));
-        out.push(L('Je wordt tegen de grond gewerkt.', 'bad'));
-        if (S().health <= 0) return E.gameOver('wasted', out);
-        E.jail(out);
-      } });
-    });
-    if (s.crew.length) {
-      const p = R.choiceChance({ b: 0.25 + R.crewBonus('vechten') + R.crewFirepower() });
-      choices.push({ label: 'Crew grijpt in', icon: 'act_crew', chance: p, odds: 'vague', act: () => {
-        const out = [L('> "NU!"', 'dim')];
-        addHeat(c.heatGain.fightCop);
-        if (rng.chance(p)) { out.push(L('Je crew stort zich op de agenten. Je bent los!', 'good')); return resume(out, 30); }
-        const m = rng.pick(s.crew); s.crew = s.crew.filter(x => x !== m);
-        out.push(L(`${m.name} wordt in de boeien geslagen. Jij ook.`, 'bad'));
-        E.jail(out);
-      } });
-    }
+    choices.push(E.fightChoice('arrest', null));
+    leaveChoices(out => { out.push(L('In de chaos ruk je je los!', 'good')); resume(out, 45); }).forEach(x => choices.push(x));
     const pRun = R.choiceChance({ b: 0.22, s: 'rennen', w: 1.5 });
     choices.push({ label: 'Losrukken en rennen', icon: 'sneakers', chance: pRun, odds: 'vague', act: () => {
       const out = [L('> Je draait je los uit de greep...', 'dim')];
-      if (rng.chance(pRun)) { out.push(L('...en je bent weg!', 'good')); return E.footChase(18, out); }
+      if (roll(pRun, 'rennen', out)) { out.push(L('...en je bent weg!', 'good')); return E.footChase(18, out); }
       out.push(L('Een tweede agent tackelt je.', 'bad'));
       E.jail(out);
     } });
@@ -1031,6 +1241,7 @@ window.AD = window.AD || {};
     E.footChase(dist, out);
   }
   function freed(out) {
+    if (run.car && run.own) { run.car = null; run.own = false; }
     if (run.car) { run.chase = null; out.push(L(`Je mag doorrijden met de ${def(run.car).name}.`)); return deliver(out); }
     run.chase = null;
     freeOnFoot(out);
@@ -1039,6 +1250,7 @@ window.AD = window.AD || {};
   E.jail = function (lines) {
     const s = S(), j = C().jail;
     AD.sfx.siren(false);
+    if (run && run.car && run.own) loseCar(lines);
     run = null;
     if (R.has('advocaat')) {
       s.inv.advocaat--;
@@ -1062,6 +1274,7 @@ window.AD = window.AD || {};
     if (fine) lines.push(L(`Justitie neemt **${fmt(fine)}** van je cash in beslag.`, 'bad'));
     lines.push(L(`Strafblad: **${s.record}/${j.maxConvictions}**. Bij ${j.maxConvictions} veroordelingen gaat de deur voorgoed dicht.`, 'info'));
     for (let i = 0; i < days; i++) nextDay([]);
+    s.cleanDays = 0;
     s.heat = Math.min(s.heat, j.heatAfter);
     s.health = Math.max(s.health, 60);
     lines.push(L(`Dag ${s.day}. Je staat weer buiten, met je spullen in een plastic zak.`, 'dim'));
@@ -1103,7 +1316,7 @@ window.AD = window.AD || {};
       { label: `Stallen in je garage (${s.garage.cars.length}/${s.garage.slots})`, icon: 'loc_garage',
         hint: 'Later repareren, overspuiten en duurder verkopen',
         disabled: s.garage.cars.length >= s.garage.slots, reason: 'Garage vol',
-        act: () => { s.garage.cars.push(inst); afterJob([L(`De ${car.name} staat veilig in je garage.`, 'good')]); } },
+        act: () => { delete inst.tries; s.garage.cars.push(inst); afterJob([L(`De ${car.name} staat veilig in je garage.`, 'good')]); } },
     ];
     C().buyers.slice(1).forEach(b => {
       const why = R.buyerBlock(inst, b);
@@ -1112,11 +1325,28 @@ window.AD = window.AD || {};
     ui({ view: 'deliver', title: 'Buit binnen', clear: true, lines, choices: ch, target: inst });
   }
 
+  // Een geslaagde klus: je crew wordt beter en trouwer
+  function crewJob(out) {
+    const c = C().crew;
+    S().crew.forEach(m => {
+      m.jobs++; m.loyalty = Math.min(1, m.loyalty + c.jobLoyalty);
+      if (m.jobs % c.jobsPerLevel === 0 && m.skill < c.maxSkill) {
+        m.skill = Math.min(c.maxSkill, Math.round((m.skill + c.skillPerLevel) * 100) / 100);
+        out.push(L(`**${m.name}** wordt beter: ${R.bonusText(m)}.`, 'good'));
+      }
+    });
+  }
   function afterJob(out) {
     run.car = null;
+    crewJob(out);
     const ch = [];
     if (run.step < maxSteps()) ch.push({ label: `Terug naar de ${run.district.name}`, act: () => E.street() });
+    if (run.snitch || R.districtHeat(run.district.id) >= 30) fleeChoices().forEach(x => ch.push(x));
     ch.push({ label: 'Naar huis', act: () => E.goHome() });
     ui({ view: 'deliver', title: 'Klus geklaard', clear: true, lines: out, choices: ch });
   }
+
+  // Gedeeld gereedschap voor crew.js en fight.js
+  E.kit = { L, ui, scene, fmt, pct, cap, hurt, addHeat, practice, leaveChoices, chaseRound: l => chaseRound(l),
+    chaseEscaped: l => chaseEscaped(l), resume: (l, d) => resume(l, d) };
 })();

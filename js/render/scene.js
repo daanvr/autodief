@@ -170,7 +170,7 @@ window.AD = window.AD || {};
   const HUB = { vRoads: [92, 212], hRoads: [56, 124], roadW: 18, park: 0.1, skip: (x0, y0) => x0 === 110 && y0 === 74 };
   const HUB_SPOTS = {
     wijk: [46, 99, 'OP PAD'], winkel: [161, 30, 'WINKEL'], garage: [275, 99, 'GARAGE'], kroeg: [46, 30, 'KROEG'],
-    baas: [275, 30, 'DE BAAS'], dokter: [275, 158, 'DOKTER'], skill: [46, 158, 'SKILLS'], huis: [161, 158, 'ONDERDUIKEN'],
+    baas: [275, 30, 'DE BAAS'], crew: [188, 96, 'CREW'], dokter: [275, 158, 'DOKTER'], skill: [46, 158, 'SKILLS'], huis: [161, 158, 'ONDERDUIKEN'],
   };
 
   SCENES.hub = function (t, dt) {
@@ -234,6 +234,46 @@ window.AD = window.AD || {};
       label(x, y + 14, d.name, hover === d.id ? '#ffe040' : null);
       if (s && s.disabled) label(x, y + 23, 'LEVEL ' + d.minLevel, '#e86a5a');
     });
+  };
+
+  // ---------- Straatoverzicht: auto's in de wijk, aanklikbaar ----------
+  const BLOCK = { vRoads: [70, 226], hRoads: [44, 118], roadW: 22, park: 0.15 };
+  SC.BLOCK_SLOTS = [[32, 50, 'left'], [132, 50, 'left'], [190, 60, 'right'], [286, 60, 'right'], [34, 124, 'left'], [150, 134, 'right'],
+    [196, 124, 'left'], [286, 134, 'right'], [76, 92, 'down'], [242, 92, 'up']];
+  const BLOCK_PEDS = [[104, 72], [212, 42], [206, 146], [60, 158]];
+  SCENES.block = function (t, dt, p) {
+    const d = p.district || AD.DISTRICTS[0];
+    if (!st.bg) { st.bg = renderCity(p.seed || 1, d.style, W, H, BLOCK); }
+    ctx.drawImage(st.bg, 0, 0);
+    night(0.34);
+    st.spots = [];
+    const seen = {};
+    p.cars.forEach((c, i) => {
+      const [x, y, dir] = SC.BLOCK_SLOTS[c.slot], def = AD.carDef(c.inst.id), id = 'car' + i;
+      SP.car(ctx, x, y, def.look, SP.carColor(c.inst), dir, t, { damage: 1 - c.inst.condition });
+      st.spots.push({ id, x, y, r: 13 }); seen[id] = { c, def, x, y };
+    });
+    SP.person(ctx, 160, 80, SP.LOOKS.player, 'down', t, false);
+    p.spot.by.forEach((b, i) => {
+      if (b.state === 'weg') return;
+      const [x, y] = BLOCK_PEDS[i % 4];
+      SP.person(ctx, x, y, SP.LOOKS['ped' + (1 + (i % 4))], 'down', t, false);
+    });
+    p.cars.forEach((c, i) => {
+      const s = seen['car' + i], on = hover === 'car' + i;
+      ring(ctx, s.x, s.y, on ? 13 + (Math.floor(t * 6) % 2) : 13, on ? '#ffe040' : c.inst.tries ? '#a07050' : '#e09a48');
+      ctx.fillStyle = '#3a2010'; ctx.fillRect(s.x - 18, s.y - 14, 9, 9);
+      SP.text(ctx, String(i + 1), s.x - 15, s.y - 12, '#ffd21f', 1);
+    });
+    p.spot.by.forEach((b, i) => {
+      const [x, y] = BLOCK_PEDS[i % 4];
+      if (b.state !== 'weg' && b.state !== 'rustig') SP.text(ctx, b.state === 'kijkt' ? '?' : '!', x - 1, y - 11, b.state === 'kijkt' ? '#ffd21f' : '#ff3030', 1, { shadow: '#000' });
+    });
+    const h = hover && seen[hover];
+    if (h) {
+      label(Math.max(50, Math.min(W - 50, h.x)), h.y > 150 ? h.y - 24 : h.y + 16, h.def.name + ' T' + h.def.tier);
+      label(Math.max(50, Math.min(W - 50, h.x)), h.y > 150 ? h.y - 16 : h.y + 24, '€' + h.def.value + ' ' + Math.round(h.c.inst.condition * 100) + ' PROCENT', '#a8e0a0');
+    }
   };
 
   // ---------- Straat 's nachts ----------
@@ -324,7 +364,7 @@ window.AD = window.AD || {};
     if (p.spot && p.spot.place.id === 'lantaarn') glow(164, 92, 22, '255,220,130', 0.08);
     marks.forEach(([mx, my, st]) => {
       if (st === 'kijkt') SP.text(ctx, '?', mx - 1, my, '#ffd21f', 1, { shadow: '#000' });
-      if (st === 'belt' && Math.floor(t * 4) % 2) SP.text(ctx, '!', mx - 1, my, '#ff3030', 1, { shadow: '#000' });
+      if ((st === 'belt' || st === 'loopt') && Math.floor(t * 4) % 2) SP.text(ctx, '!', mx - 1, my, '#ff3030', 1, { shadow: '#000' });
     });
     [20, 100, 180, 260].forEach(lx => { glow(lx + 1, 64, 13, '255,220,130', 0.07); glow(lx + 41, 115, 13, '255,220,130', 0.07); });
     if (phase === 'patrol') { const f = Math.floor(t * 8) % 2; glow(Math.round(st.patrol), 80, 12, f ? '255,40,40' : '40,80,255', 0.12); }

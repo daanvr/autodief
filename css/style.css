@@ -266,3 +266,18 @@ button { font-family: inherit; }
   #app { border-width: 0; }
   .titlebar .logo { display: none; }
 }
+
+/* ---------- Versie 2: berekening, oefening, crew, vluchtauto ---------- */
+.choice .hint.calc { font-size: 16px; color: #1f3fa0; }
+.prac { position: relative; height: 12px; margin: -1px 36px 4px 102px; background: #f6e6c6; border: 1px solid rgba(122, 74, 32, 0.4); }
+.prac i { position: absolute; left: 0; top: 0; bottom: 0; background: #7ab04a; }
+.prac span { position: absolute; left: 100%; top: -4px; margin-left: 4px; font-size: 14px; color: var(--ink-soft); white-space: nowrap; }
+.roster { list-style: none; margin: 6px 0 0; padding: 0; font-size: 17px; line-height: 1.1; }
+.roster li { margin: 0 0 6px; padding-top: 4px; border-top: 1px solid rgba(122, 74, 32, 0.4); }
+.roster span { color: var(--ink-soft); }
+.gar .slot .gw { position: absolute; left: 2px; bottom: 0; font-size: 13px; font-weight: normal; color: #fff; background: #1f3fa0; padding: 0 3px; }
+.rbar.hp i { background: linear-gradient(#5ab03a, #2a7a1a); }
+.people i.p.loopt { background: #e06020; animation: blink 0.7s steps(2) infinite; }
+.people i.p.weg { opacity: 0.25; }
+.bylist li.loopt span { color: #c04010; }
+.foot a { color: #1f3fa0; }

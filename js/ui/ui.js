@@ -116,6 +116,7 @@ window.AD = window.AD || {};
         (icon ? `<img class="ico" src="${icon}" alt="">` : '<span class="ico blank"></span>') +
         `<span class="txt"><span class="lbl">${esc(c.label)}</span>` +
         (c.disabled && c.reason ? `<span class="hint why">${esc(c.reason)}</span>` : c.hint ? `<span class="hint">${esc(c.hint)}</span>` : '') +
+        (c.why && !c.disabled ? `<span class="hint calc">${esc(c.why)} = ${pct(c.chance)}${c.chance >= 0.96 ? ' (maximum)' : ''}</span>` : '') +
         `</span>` + oddsHTML(c);
       b.addEventListener('click', () => pick(c));
       el.actions.appendChild(b);
@@ -155,15 +156,18 @@ window.AD = window.AD || {};
       return;
     }
     const c = AD.SETTINGS, mx = c.maxSkill;
+    const skill = k => {
+      const lvl = s.skills[k], need = AD.rules.practiceNeed(lvl), xp = (s.skillXp || {})[k] || 0;
+      return bar(AD.engine.SKILLS[k][0], lvl / mx, 'orange', lvl) +
+        (lvl < mx ? `<div class="prac" title="Oefening tot niveau ${lvl + 1}: ${xp} van ${need}"><i style="width:${Math.min(100, xp / need * 100)}%"></i><span>${xp}/${need}</span></div>` : '');
+    };
     el.left.innerHTML = `<h3>Karakter</h3><div class="body">
       <div class="charrow"><img class="portrait" src="${SP.portraitURL(1, 'player', 4)}" alt="">
         <div><div class="name">Jij</div><div class="sub">Level ${s.level}</div>${s.skillPoints ? `<div class="sub pts">${s.skillPoints} punt te besteden</div>` : ''}</div></div>
       ${bar('Gezondheid', s.health / c.health.max, 'green', s.health)}
-      ${bar('Slotenkennis', s.skills.inbreken / mx, 'orange', s.skills.inbreken)}
-      ${bar('Rijden', s.skills.rijden / mx, 'orange', s.skills.rijden)}
-      ${bar('Rennen', s.skills.rennen / mx, 'orange', s.skills.rennen)}
-      ${bar('Praatjes', s.skills.gladheid / mx, 'orange', s.skills.gladheid)}
-      ${bar('Schieten', s.skills.schieten / mx, 'orange', s.skills.schieten)}
+      ${s.armor ? bar('Bescherming', s.armor / 75, 'blue', s.armor) : ''}
+      ${Object.keys(AD.engine.SKILLS).map(skill).join('')}
+      <div class="sub">Dunne balk: oefening. Wat je doet, word je beter in.</div>
     </div>`;
   }
 
@@ -202,7 +206,7 @@ window.AD = window.AD || {};
     }
     if (run && run.spot && run.target && lastView === 'street') {
       const sp = run.spot;
-      const st = { rustig: 'let niet op', kijkt: 'kijkt!', belt: 'belt politie!', weg: 'weg' };
+      const st = { rustig: 'let niet op', kijkt: 'kijkt!', loopt: 'zoekt een telefoon!', belt: 'belt politie!', weg: 'weg' };
       const list = sp.by.length ? sp.by.map(b => `<li class="${b.state}">${esc(b.text)} <span>${st[b.state]}</span></li>`).join('') : '<li>Niemand op straat.</li>';
       html += `<section class="panel"><h3>Omgeving</h3><div class="body"><div class="sub">${esc(sp.place.text)}</div><ul class="bylist">${list}</ul></div></section>`;
     }
@@ -211,12 +215,13 @@ window.AD = window.AD || {};
       const m = s.crew[i];
       team += m ? `<div class="slot" title="${esc(m.name + ' (' + AD.CREW_ROLES[m.role].name + ')')}"><img src="${SP.portraitURL(m.uid, 'crew', 2)}" alt=""><i style="width:${Math.max(0, m.hp)}%"></i></div>` : '<div class="slot"></div>';
     }
-    html += `<section class="panel"><h3>Team</h3><div class="body"><div class="grid2">${team}</div>
+    const roster = s.crew.map(m => `<li><b>${esc(m.name.split(' ')[0])}</b> ${esc(AD.CREW_ROLES[m.role].name.toLowerCase())}<br><span>${esc(R.bonusText(m))}</span><br><span>${Math.max(0, m.hp)} gezond${m.armor ? `, bescherming ${m.armor}` : ''}${m.weapon ? `, ${esc(AD.ITEMS[m.weapon].name.toLowerCase())}` : ''}</span></li>`).join('');
+    html += `<section class="panel"><h3>Team</h3><div class="body"><div class="grid2">${team}</div>${roster ? `<ul class="roster">${roster}</ul>` : ''}
       ${s.crew.length ? `<div class="sub">Crew-deel: ${pct(R.crewCut())}</div>` : ''}</div></section>`;
     let gar = '';
     for (let i = 0; i < s.garage.slots; i++) {
       const c = s.garage.cars[i];
-      gar += c ? `<div class="slot car${c.hot ? ' hot' : ''}" title="${esc(AD.carDef(c.id).name)}"><img src="${SP.carURL(c, 2)}" alt=""></div>` : '<div class="slot car"></div>';
+      gar += c ? `<div class="slot car${c.hot ? ' hot' : ''}" title="${esc(AD.carDef(c.id).name)}"><img src="${SP.carURL(c, 2)}" alt="">${s.getaway === c.uid ? '<b class="gw">vlucht</b>' : ''}</div>` : '<div class="slot car"></div>';
     }
     html += `<section class="panel"><h3>Garage</h3><div class="body"><div class="gar">${gar}</div></div></section>`;
     el.right.innerHTML = html;
@@ -234,6 +239,14 @@ window.AD = window.AD || {};
     const run = AD.engine.run();
     const radar = AD.rules.radar();
     const ch = run && run.chase, sp = run && run.spot;
+    if (run && run.fight) {
+      const f = run.fight, s = AD.state.S, hp = v => `<span class="rbar hp"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></span>`;
+      const who = (n, h, a) => row(esc(n), hp(h), `${Math.max(0, Math.round(h))}${a ? ` · besch. ${a}` : ''}`);
+      el.meter.className = 'on';
+      el.meter.innerHTML = who('Jij', s.health, s.armor) + s.crew.map(m => who(m.name.split(' ')[0], m.hp, m.armor)).join('') +
+        row('<b class="alarm">Agenten</b>', `<span class="people">${f.them.map(x => `<i class="p ${x.hp > 0 ? 'belt' : 'weg'}"></i>`).join('')}</span>`, `${f.them.filter(x => x.hp > 0).length} over`);
+      return;
+    }
     if (ch) {
       const d = Math.max(0, Math.min(100, Math.round(ch.distance)));
       const delta = ch.lastDelta;
@@ -241,16 +254,16 @@ window.AD = window.AD || {};
       el.meter.className = 'on';
       el.meter.innerHTML =
         row('Voorsprong', `<span class="mbar"><i style="width:${d}%"></i><b style="left:${d}%"></b></span>`, `<strong>${d}</strong>/100 ${trend}`) +
-        row('Verloop', spark(ch.history || [d]), `${ch.units} eenhe${ch.units === 1 ? 'id' : 'den'}`) +
+        row('Verloop', spark(ch.history || [d]), ch.mode === 'foot' && ch.units === 1 ? '1 agent' : `${ch.units} eenhe${ch.units === 1 ? 'id' : 'den'}`) +
         `<div class="mnote">0 = gepakt · 100 = ontsnapt${radar >= 1 ? '' : ' · koop een politiescanner voor exacte kansen per keuze'}</div>`;
       return;
     }
-    if (sp && run.target && lastView === 'street') {
+    if (sp && (run.target || run.block) && lastView === 'street') {
       const eta = Math.max(0, sp.eta);
       const close = Math.round(Math.max(0, Math.min(1, 1 - eta / 10)) * 100);
       const etaTxt = radar >= 1 ? `~${eta.toFixed(1).replace('.', ',')} min` : eta > 6 ? 'ver weg' : eta > 3 ? 'in de buurt' : 'dichtbij!';
       const here = sp.by.filter(b => b.state !== 'weg');
-      const watch = here.filter(b => b.state === 'kijkt' || b.state === 'belt').length;
+      const watch = here.filter(b => b.state !== 'rustig').length;
       const dots = here.map(b => `<i class="p ${b.state}" title="${esc(b.text + ': ' + b.state)}"></i>`).join('') || '<span class="none">niemand</span>';
       const att = Math.round(sp.attention);
       el.meter.className = 'on';
@@ -269,11 +282,15 @@ window.AD = window.AD || {};
     const c = AD.SETTINGS;
     el['hud-day'].textContent = s.day;
     el['hud-money'].textContent = fmt(s.money);
+    const ver = document.getElementById('version');
+    if (ver) ver.textContent = 'Versie ' + AD.VERSION.nr;
     el['hud-debt'].textContent = fmt(s.debt);
     el['hud-costs'].textContent = fmt(c.rentPerDay);
     el['hud-level'].textContent = s.level;
     const rec = document.getElementById('hud-record');
     if (rec) rec.textContent = (s.record || 0) + '/' + c.jail.maxConvictions;
+    const need = AD.rules.xpForNext(s.level), xpt = document.getElementById('hud-xpt');
+    if (xpt) xpt.textContent = `${s.xp} / ${need}`;
     el['hud-xp'].style.width = Math.round(s.xp / AD.rules.xpForNext(s.level) * 100) + '%';
     el['hud-heat'].style.width = Math.round(s.heat) + '%';
     const heads = c.heat.heads, per = c.heat.max / heads;

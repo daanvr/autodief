@@ -48,7 +48,7 @@ AD.EVENTS = {
       choices: [
         { label: 'Vriendelijk groeten', c: { b: 0.6, s: 'gladheid', w: 2 },
           ok: { text: 'Ze knikken en lopen door.' },
-          fail: { susp: 15, heat: 3, text: 'Ze maken een foto van je. Dat is niet best.' } },
+          fail: { susp: 15, heat: 3, text: 'Ze schrijven je signalement op in een notitieboekje.' } },
         { label: 'Een andere straat in', ok: { susp: 5, text: 'Je slaat een zijstraat in.' } },
       ] },
     { id: 'rival', weight: 0.15, cooldown: 50,
@@ -151,11 +151,11 @@ AD.EVENTS = {
       choices: [
         { label: 'ID laten zien', c: { b: 0.55, s: 'gladheid', w: 2, h: -0.006 },
           ok: { text: 'Hij bekijkt je pasje lang... en laat je gaan.' },
-          fail: { end: 'arrest', text: 'Op zijn schermpje verschijnt jouw gezicht. "Meekomen."' } },
+          fail: { end: 'arrest', text: 'Hij leest je naam voor in zijn portofoon. Het kraakt even. "Meekomen."' } },
         { label: 'Wegrennen', ok: { heat: 6, end: 'footChase', dist: 30, text: 'Je duwt hem opzij en rent!' } },
       ] },
     { id: 'undercover', when: heatAtLeast(25), weight: 0.6,
-      text: 'Een onopvallende grijze auto rijdt al drie straten met je mee. Twee mannen, petjes, oortjes.',
+      text: 'Een onopvallende grijze auto rijdt al drie straten met je mee. Twee mannen, snorren, portofoon op het dashboard.',
       choices: [
         { label: 'Een café binnenlopen', c: { b: 0.6, s: 'gladheid', w: 1.5 },
           ok: { susp: -10, text: 'Je gaat aan de bar zitten. Na tien minuten rijden ze weg.' },
@@ -430,7 +430,7 @@ AD.EVENTS = {
           ok: { gain: [14, 22], text: 'Je zigzagt tussen de stappers door.' },
           fail: { loss: [8, 12], text: 'Je botst tegen een uitsmijter.' } },
       ] },
-    { id: 'bike', text: ['Een fiets staat niet op slot!', 'Een deelscooter staat aan de kant, met de sleutel er nog in.'],
+    { id: 'bike', text: ['Een fiets staat niet op slot!', 'Een brommer staat aan de kant, met de sleutel er nog in.'],
       choices: [
         { label: 'Pakken en weg', c: { b: 0.7, s: 'rennen', w: 0.5 },
           ok: { gain: [28, 38], heat: 1, text: 'Trappen!' },
@@ -533,7 +533,7 @@ AD.EVENTS = {
           ok: { gain: [8, 12], text: 'Je gebruikt de bus als dekking.' },
           fail: { loss: [6, 10], text: 'Het bushokje is van glas.' } },
       ] },
-    { id: 'terrace', districts: ['centrum'], text: 'Een terras vol mensen onder heaters.',
+    { id: 'terrace', districts: ['centrum'], text: 'Een terras vol mensen onder warmtelampen.',
       choices: [
         { label: 'Gaan zitten en een menukaart pakken', c: { b: 0.45, s: 'gladheid', w: 1.8 },
           ok: { end: 'escape', text: 'Je bestelt een cola. De agenten rennen langs je tafeltje.' },
@@ -551,7 +551,7 @@ AD.EVENTS = {
           ok: { gain: [16, 22], text: 'Over het gras, door de bosjes, het hek over.' },
           fail: { loss: [8, 12], hurt: [2, 6], text: 'Je struikelt over een boomwortel.' } },
       ] },
-    { id: 'van', text: 'Een bestelbus met open laaddeuren. De chauffeur zit voorin te bellen.',
+    { id: 'van', text: 'Een bestelbus met open laaddeuren. De chauffeur zit voorin de krant te lezen.',
       choices: [
         { label: 'Achterin springen', c: { b: 0.4, s: 'gladheid', w: 1.4 },
           ok: { end: 'escape', text: 'De deuren slaan dicht, de bus rijdt weg. Je bent ze kwijt. Waar je naartoe gaat, weet je niet.' },

@@ -37,7 +37,7 @@ AD.SPOTS = {
     { id: 'dronken', text: 'een dronken man die een liedje zingt', call: 0.03, leaves: 0.5, districts: ['arbeiders', 'centrum'] },
     { id: 'taxi', text: 'een taxichauffeur die op een klant wacht', call: 0.3, leaves: 0.4, districts: ['centrum', 'haven'] },
     { id: 'fietser', text: 'een fietser', call: 0.1, leaves: 1.2 },
-    { id: 'bezorger', text: 'een maaltijdbezorger op een scooter', call: 0.08, leaves: 1.0, districts: ['centrum', 'arbeiders', 'villapark'] },
+    { id: 'bezorger', text: 'een pizzakoerier op een brommer', call: 0.08, leaves: 1.0, districts: ['centrum', 'arbeiders', 'villapark'] },
     { id: 'jogger', text: 'een nachtelijke hardloper', call: 0.12, leaves: 1.3, districts: ['villapark', 'centrum'] },
     { id: 'beveiliger', text: 'een beveiliger op ronde', call: 0.7, leaves: 0.35, districts: ['haven', 'villapark'] },
     { id: 'portier', text: 'de portier van het gebouw', call: 0.6, leaves: 0.1, districts: ['haven'] },

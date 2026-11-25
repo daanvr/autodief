@@ -16,7 +16,7 @@ AD.SETTINGS = {
   heat: {
     max: 100,
     heads: 4,                   // aantal politiehoofdjes in de HUD (GTA1 had er 4)
-    decayPerDay: 12,            // zoveel zakt je heat per nieuwe dag
+    decayPerDay: 15,            // zoveel zakt je heat per dag (geen databases, papieren dossiers)
     lieLowDecay: 35,            // extra daling bij onderduiken
     lieLowCost: 60,
   },
@@ -32,9 +32,14 @@ AD.SETTINGS = {
 
   health: { max: 100, regenPerDay: 15, doctorCostPerHp: 6 },
 
-  xp: { perTier: 25, chaseBonus: 15, base: 100, growth: 1.45 },
+  xp: { perTier: 30, chaseBonus: 15, base: 100, growth: 1.2 },
   skillPerPoint: 0.04,          // +4% kans per vaardigheidspunt
   maxSkill: 10,
+  // Leren door te doen: na (base + perLevel * huidig niveau) keer oefenen gaat een vaardigheid omhoog.
+  // Een gelukte poging telt als 'ok', een mislukte als 'fail'.
+  practice: { base: 5, perLevel: 3, ok: 1, fail: 0.5, speed: { inbreken: 0.5 } },   // speed: inbreken doe je zo vaak dat het half telt
+  // Kennis van gereedschap en automodellen groeit door gebruik
+  knowledge: { perUse: 0.01, toolMax: 0.1, perModel: 0.03, modelMax: 0.09 },
 
   breakin: {
     base: 0.9,                  // kans = base - beveiliging + gereedschap + skill
@@ -48,7 +53,8 @@ AD.SETTINGS = {
   start: { base: 0.95, min: 0.05, max: 0.98, panicPenalty: 0.15, retryPenalty: 0.1, failAlarm: 0.15 },
 
   street: {
-    maxSteps: 8,                // zoveel 'stappen' per nacht
+    maxSteps: 6,                // zoveel straten per nacht
+    carsPerStreet: [4, 6],      // auto's om uit te kiezen per straat
     eventChance: 0.15,          // kans op een straat-gebeurtenis (de rest: een auto)
     suspicionPerStep: 4,
     patrolBase: 0.02,
@@ -60,7 +66,8 @@ AD.SETTINGS = {
     patrolEtaPolice: 6,         // ...min politie-aanwezigheid van de wijk * dit
     patrolEtaHeat: 0.04,        // ...min heat * dit
     patrolEtaMin: 1.5,
-    callEta: [2, 4],            // minuten tot de politie er is na een melding
+    callEta: [3, 6],            // minuten tot de politie er is na een melding
+    phoneWalk: [0.8, 2],        // minuten die een omstander nodig heeft om bij een telefoon te komen (geen mobieltjes)
     waitTime: 2,                // 'wachten tot de kust veilig is'
     callShare: 0.6,             // kans dat een omstander die je ziet ook echt belt
     noisePerMinute: 6,          // aandacht per minuut prutsen
@@ -77,6 +84,7 @@ AD.SETTINGS = {
     daysPerHeat: 0.08,          // ...plus heat * dit
     confiscate: 0.3,            // deel van je cash dat in beslag wordt genomen
     heatAfter: 30,              // heat na vrijlating
+    expireDays: 10,             // na zoveel dagen zonder veroordeling vervalt er een aantekening
   },
 
   chase: {
@@ -85,14 +93,16 @@ AD.SETTINGS = {
     startNoticed: 55,
     startFootAlarm: 50,
     driftSpeed: 10,             // effect van de topsnelheid van je auto per ronde
-    pressureWeight: 10,         // hoe hard de politie per ronde inloopt
+    pressureWeight: 8,         // hoe hard de politie per ronde inloopt
     pressurePenalty: 0.15,      // politiedruk verlaagt elke kans
     momentum: 0.12,             // voorsprong boven 50 groeit vanzelf, eronder krimpt hij (kortere achtervolgingen)
     bailOutKeep: 0.8,           // voorsprong die je houdt als je uitstapt
     wreckAt: 0.12,              // auto-conditie waarbij de motor het opgeeft
     shootoutHeat: 50,           // vanaf deze heat kan er geschoten worden
     shootoutChance: 0.35,
-    heliHeat: 75,
+    heliHeat: 92,               // een helikopter komt alleen in uitzonderlijke gevallen
+    loseSightAt: 60,            // vanaf deze voorsprong kan de politie je gewoon kwijtraken (geen GPS, geen camera's)
+    loseSightChance: 0.45,
   },
 
   garage: { startSlots: 1, maxSlots: 5, slotCost: [0, 0, 800, 2000, 4500, 9000] },
@@ -100,7 +110,19 @@ AD.SETTINGS = {
   resprayBase: 150,
   resprayFactor: 0.04,
 
-  crew: { maxSize: 3, poolSize: 3 },
+  crew: {
+    maxSize: 3, poolSize: 3,
+    jobsPerLevel: 3, skillPerLevel: 0.05, maxSkill: 1.6,   // crew wordt beter van klussen
+    bonusPay: 200, bonusLoyalty: 0.12, jobLoyalty: 0.03,
+    doctorPerHp: 4,
+    snitchBase: 0.7, snitchLoyalty: 0.6, hushMoney: 400,   // kans dat een achtergelaten crewlid praat
+    holdGain: 45,                                          // voorsprong als iemand de politie ophoudt
+  },
+
+  // Buurten onthouden wat je er doet
+  districtHeat: { theft: 6, alarm: 8, chase: 10, snitch: 40, decayPerDay: 12 },
+
+  fight: { agentHp: 38, agentHit: 0.36, agentDmg: [6, 13], absorb: 0.65, reinforceFrom: 4, reinforceChance: 0.25, maxReinforce: 2, heatPerRound: 4 },
 
   // Wie koopt je auto's?
   buyers: [
