@@ -12,16 +12,29 @@ window.AD = window.AD || {};
   const synth = window.speechSynthesis;
   const TTS = AD.tts = { on: false, rate: 1.05 };
   try { TTS.on = localStorage.getItem('autodief.tts') === '1'; } catch (e) { }
-  let voice = null, last = null, btn = null;
+  let voice = null, last = null, btn = null, sel = null, note = null;
 
-  // Beste Nederlandse stem: Premium > Enhanced > overige nl-NL > nl-BE
+  // macOS 27 heeft een fout waardoor ingebouwde (niet-Premium) stemmen een harde kraak kunnen geven.
+  // Zulke stemmen kiest het spel nooit zelf; de speler kan ze wel bewust aanzetten.
+  let macRisk = /Mac/.test(navigator.platform || navigator.userAgent);   // onbekende versie: voorzichtig
+  const ready = (async () => {
+    const d = navigator.userAgentData;
+    if (!macRisk || !d || !d.getHighEntropyValues) return;
+    try { const v = parseInt((await d.getHighEntropyValues(['platformVersion'])).platformVersion, 10); if (v) macRisk = v >= 27; } catch (e) { }
+  })();
+  const risky = v => macRisk && v.localService && !/premium/i.test(v.name);
+  let chosen = null;
+  try { chosen = localStorage.getItem('autodief.stem'); } catch (e) { }
+
+  // Beste Nederlandse stem zonder kraakrisico: Premium > Enhanced > overige nl-NL > nl-BE
+  const voices = () => !synth ? [] : synth.getVoices().filter(v => /^nl/i.test(v.lang));
   function pickVoice() {
-    if (!synth) return;
-    const vs = synth.getVoices().filter(v => /^nl/i.test(v.lang));
     const score = v => (/nl[-_]NL/i.test(v.lang) ? 10 : 0) + (/premium/i.test(v.name) ? 5 : /enhanced|verbeterd/i.test(v.name) ? 3 : 0) + (v.localService ? 1 : 0);
-    voice = vs.sort((a, b) => score(b) - score(a))[0] || null;
+    const list = voices().sort((x, y) => score(y) - score(x));
+    voice = list.find(v => v.voiceURI === chosen) || list.find(v => !risky(v)) || null;
+    menu();
   }
-  if (synth) { pickVoice(); synth.addEventListener('voiceschanged', pickVoice); }
+  if (synth) { synth.addEventListener('voiceschanged', pickVoice); }
 
   // Tekst geschikt maken om uit te spreken
   function clean(t) {
@@ -39,12 +52,13 @@ window.AD = window.AD || {};
 
   function say(parts) {
     if (!synth) return;
-    synth.cancel();
-    parts.filter(Boolean).forEach(p => {
-      const u = new SpeechSynthesisUtterance(clean(p));
-      u.lang = voice ? voice.lang : 'nl-NL';
-      if (voice) u.voice = voice;
-      u.rate = TTS.rate;
+    if (synth.speaking || synth.pending) synth.cancel();
+    if (!voice) return;                          // liever stil dan een stem die kan kraken
+    let list = parts.filter(Boolean).map(clean);
+    if (risky(voice)) list = [list.map(t => /[.!?]$/.test(t.trim()) ? t : t + '.').join(' ')];   // één keer starten en stoppen
+    list.forEach(t => {
+      const u = new SpeechSynthesisUtterance(t);
+      u.lang = voice.lang; u.voice = voice; u.rate = TTS.rate;
       synth.speak(u);
     });
   }
@@ -75,10 +89,27 @@ window.AD = window.AD || {};
     TTS.on = on;
     try { localStorage.setItem('autodief.tts', on ? '1' : '0'); } catch (e) { }
     if (btn) { btn.textContent = on ? 'Voorlezen aan' : 'Voorlezen uit'; btn.classList.toggle('off', !on); }
-    if (on && last) TTS.speakScreen(last); else TTS.stop();
+    menu();
+    if (on && last) ready.then(() => { pickVoice(); if (TTS.on) TTS.speakScreen(last); }); else TTS.stop();
     if (AD.rec) AD.rec.log('tts', { on });
   }
   TTS.toggle = () => setOn(!TTS.on);
+
+  // Stemkeuze en uitleg, alleen zichtbaar als voorlezen aan staat
+  function menu() {
+    if (!sel) return;
+    const list = voices();
+    sel.innerHTML = '';
+    const add = (value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; sel.appendChild(o); };
+    if (!voice) add('', 'Kies een stem');
+    list.forEach(v => add(v.voiceURI, v.name.replace(/\s*\(.*?\)\s*$/, m => /premium|enhanced|verbeterd/i.test(m) ? m : '') + (risky(v) ? ' (kan kraken)' : v.localService ? '' : ' (online)')));
+    sel.value = voice ? voice.voiceURI : '';
+    sel.style.display = TTS.on && list.length ? '' : 'none';
+    note.style.display = TTS.on && (!voice || risky(voice)) ? 'block' : 'none';
+    note.textContent = !list.length ? 'Deze browser heeft geen Nederlandse stem. In Google Chrome werkt voorlezen meestal wel.'
+      : !voice ? 'Voorlezen blijft stil: macOS 27 heeft een fout waardoor de ingebouwde stemmen hard kunnen kraken. Speel in Google Chrome (online stem), installeer een Premium-stem, of kies hierboven bewust een stem.'
+        : 'Let op: deze stem kan op macOS 27 hard kraken. Zet je volume laag.';
+  }
 
   // Om de UI heen hangen: elk nieuw scherm voorlezen als het aan staat
   function hook() {
@@ -106,6 +137,19 @@ window.AD = window.AD || {};
     bar.insertBefore(btn, bar.firstChild);
     btn.textContent = TTS.on ? 'Voorlezen aan' : 'Voorlezen uit';
     btn.classList.toggle('off', !TTS.on);
+    sel = document.createElement('select');
+    sel.id = 'tts-voice'; sel.className = 'tbtn'; sel.title = 'Stem om mee voor te lezen'; sel.style.maxWidth = '190px';
+    sel.addEventListener('change', () => {
+      chosen = sel.value;
+      try { localStorage.setItem('autodief.stem', chosen); } catch (e) { }
+      pickVoice(); if (TTS.on && last) TTS.speakScreen(last);
+    });
+    bar.insertBefore(sel, btn);
+    note = document.createElement('div');
+    note.id = 'tts-note';
+    note.style.cssText = 'display:none;background:#f8e0a0;border-bottom:2px solid #7a4a20;padding:4px 12px;font-size:19px;color:#8a0c0c';
+    document.querySelector('.titlebar').after(note);
+    ready.then(pickVoice);
     if (!synth) { btn.disabled = true; btn.title = 'Deze browser kan niet voorlezen'; }
   }
 

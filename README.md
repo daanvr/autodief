@@ -36,7 +36,7 @@ en ga naar http://localhost:8642. Kiezen doe je met klikken of met de toetsen **
 
 ## Voorlezen
 
-Met de knop **Voorlezen** bovenin (of toets **V**) leest je systeemstem elk scherm voor: eerst de tekst, daarna de keuzes ("Druk 1 voor ..., 73 procent kans"). Het spel kiest automatisch de beste Nederlandse stem (op de Mac: Xander). **R** herhaalt het laatste scherm, **Esc** stopt het voorlezen. De instelling wordt onthouden. Code: `js/ui/speech.js`.
+Met de knop **Voorlezen** bovenin (of toets **V**) leest je systeemstem elk scherm voor: eerst de tekst, daarna de keuzes ("Druk 1 voor ..., 73 procent kans"). Het spel kiest zelf een Nederlandse stem. Op macOS 27 kunnen ingebouwde stemmen door een fout van Apple hard kraken; die kiest het spel niet vanzelf. Met het keuzelijstje ernaast kies je zelf een stem. **R** herhaalt het laatste scherm, **Esc** stopt het voorlezen. De instelling wordt onthouden. Code: `js/ui/speech.js`.
 
 ## Opnames en feedback
 

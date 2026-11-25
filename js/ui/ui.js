@@ -236,6 +236,7 @@ window.AD = window.AD || {};
   function row(label, inner, val) { return `<div class="mrow"><span class="ml">${label}</span>${inner}<span class="mval">${val}</span></div>`; }
 
   function renderMeter() {
+    if (!AD.state.S) { el.meter.innerHTML = ''; el.meter.className = ''; return; }   // titelscherm zonder potje
     const run = AD.engine.run();
     const radar = AD.rules.radar();
     const ch = run && run.chase, sp = run && run.spot;
